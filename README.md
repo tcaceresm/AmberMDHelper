@@ -8,10 +8,13 @@ setupMD.sh script is used to:
   - Parameterization, including partial charge calculations, of ligands/cofactor.
   - Creation of dry and solvated topologies.
 ### Requirements
-A working directory containing:
-- receptor folder: This folder must contain a single PDB file of the receptor.
-- ligands folder (optional: This folder must contain ligands files in mol2 format. Ligand must be already protonated.
-- cofactor folder (optional): This folder should contain a single cofactor file in mol2 format. Cofactor must be already protonated.
+- Software:
+  - AmberTools. Tested with version 24 and 25.
+  - Bash. Tested with ```GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)```
+- A working directory containing:
+  - receptor folder: This folder must contain a single PDB file of the receptor.
+  - ligands folder (optional: This folder must contain ligands files in mol2 format. Ligand must be already protonated.
+  - cofactor folder (optional): This folder should contain a single cofactor file in mol2 format. Cofactor must be already protonated.
 ### Usage
 Use ```-h```, ```--help``` options to show script help.
 ```bash
