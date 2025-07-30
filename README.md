@@ -7,17 +7,18 @@ Scripts used to setup molecular dynamics simulations using AMBER software.
   - AmberTools. Tested with version 24 and 25.
 
 ## setup_MD.sh
-setup_MD.sh script is used to:
-- Create a reproducible folder structure based on receptor, ligands, cofactor and replicas.
-- Configure all required input files.
-- Process receptor, ligands and cofactor files using tools from AmberTools. This include:
-  - Parameterization, including partial charge calculations, of ligands/cofactor.
-  - Creation of dry and solvated topologies.
+setup_MD.sh script is designed to:
+- Prepare all required input files for the generation of topology and molecular dynamics (MD) input files.
+- Build a reproducible directory structure based on the receptor, ligands, cofactor, and number of replicas.
+- Process receptor, ligand, and cofactor files using, which includes:
+  - Parameterization of ligands and cofactors, including partial charge calculation.
+  - Generation of both dry and solvated topology and coordinate files.
+Ligand and cofactor are optional.
 ### Requirements
-- A working directory containing:
-  - receptor folder: This folder must contain a single PDB file of the receptor.
-  - ligands folder (optional: This folder must contain ligands files in mol2 format. Ligand must be already protonated.
-  - cofactor folder (optional): This folder should contain a single cofactor file in mol2 format. Cofactor must be already protonated.
+A working directory containing:
+ - receptor folder: This folder must contain a single PDB file of the receptor.
+ - ligands folder (optional: This folder must contain ligands files in mol2 format. Ligand must be already protonated.
+ - cofactor folder (optional): This folder should contain a single cofactor file in mol2 format. Cofactor must be already protonated.
 ### Usage
 Use ```-h```, ```--help``` options to show script help.
 ```bash
@@ -83,9 +84,9 @@ WDPATH
 The default MD protocol consist of two stages: equilibration and production:
 - Equilibration:
   - 2 restrained minimization.
-  - Restrained NVT to raise temperature.
-  - 5 Restraint releasing NPT.
-  - Final unrestrained NPT. The duration of this step is controlled via ```--equi_time``` option.
+  - Restrained NVT MD to raise temperature.
+  - 5 Restraint-releasing NPT MD.
+  - Final unrestrained NPT MD. The duration of this step is controlled via ```--equi_time``` option.
 - Production:
   - Unrestrained NPT. The duration of this step is controlled via ```--prod_time``` option.
 
