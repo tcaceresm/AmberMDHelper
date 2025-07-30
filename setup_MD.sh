@@ -1,13 +1,5 @@
 #!/usr/bin/bash
 
-#set -euo pipefail
-
-# To Do:
-#   - Refactor PrepareTopologies functions to avoid redundancy
-#   - Check if files exists. Add overwrite option.
-#   - Parallelize PrepareSmallMolecule
-#   - Parallelize PrepareTopology
-
 # Global variables are always UPPERCASE.
 # Local are used with local keyword and lowercase.
 # If some function requires too much arguments,
