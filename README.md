@@ -1,3 +1,4 @@
+![logo](image.png)
 # AmberMDHelper
 Scripts used to setup molecular dynamics simulations using AMBER software.
 ## Software requirements
