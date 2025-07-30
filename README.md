@@ -97,11 +97,8 @@ setup_ASMD.sh script configures Adaptative Steered Molecular Dynamics:
 - Creates distance restraint file which depends on the number of stages.
 - Creates input files for the required number of trajectories per stage under NVT ensemble.
 - It uses Amber atom mask. You don't have to manually configure atoms' id.
-- Thanks to T. Dwight McGee Jr., Hailey Bureau, Caley Allen, Rigoberto Hernandez for providing ASMD.py script in
-<https://ambermd.org/tutorials/advanced/tutorial26/> tutorial. **ASMD.py provided here supports python3** but I haven't extensively tested (I used Python 3.13.3).
 ### Requirements
 - A working directory containing:
-  - ASMD.py python script (provided ![here](ASMD.py)), which requires numpy package.
   - Solvated Protein-Ligand topology.
   - Coordinate file (rst7 format). Usually obtained from equilibrated system.
 ### Usage
@@ -173,7 +170,14 @@ WDPATH
 └── SMD_PROT_ATOMS.pdb
 ```
 ## run_ASMD.sh
-
+Perform ASMD.
+### Requirements
+- Directory containing the output of ```setup_ASMD.sh```
+- Solvated Protein-Ligand topology.
+- Coordinate file (rst7 format). Usually obtained from equilibrated system.
+- Numpy package ()
+- ASMD.py. Thanks to T. Dwight McGee Jr., Hailey Bureau, Caley Allen, Rigoberto Hernandez for providing ASMD.py script in
+<https://ambermd.org/tutorials/advanced/tutorial26/> tutorial. **ASMD.py provided here supports python3** but I haven't extensively tested (I used Python 3.13.3).
 ### Usage
 Use ```-h```, ```--help``` options to show script help.
 ```bash
@@ -200,12 +204,12 @@ Optional:
 
 ```
 
-In the setup_ASMD.sh example, we configured ASMD with a velocity of 10 A/ns, 3 stages and 2 trajectories per stage.
-In order to run run_ASMD.sh script, we're going to use the same parameters, which are required options.
+In the ```setup_ASMD.sh``` example, we configured ASMD with a velocity of 10 A/ns, 3 stages and 2 trajectories per stage.
+In order to run ```run_ASMD.sh``` script, we're going to use the same parameters, which are required options.
 
 ```
 bash run_ASMD.sh --wd . --topo complex_solvated.parm7 \
 --coord equilibrated_complex.nc --velocity 10 \
---stages 3 --n_traj 3 --force_k 7.2
+--stages 3 --n_traj 2 --force_k 7.2
 ```
 
