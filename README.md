@@ -8,7 +8,7 @@ Scripts used to setup molecular dynamics simulations using AMBER software.
   - AmberTools. Tested with version 24 and 25.
 
 ## setup_MD.sh
-setup_MD.sh script is designed to:
+setup_MD.sh script configures conventional molecular dynamics simulations:
 - Prepare all required input files for the generation of topology and molecular dynamics (MD) input files.
 - Build a reproducible directory structure based on the receptor, ligands, cofactor, and number of replicas.
 - Process receptor, ligand, and cofactor files using, which includes:
