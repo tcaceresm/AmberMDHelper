@@ -98,7 +98,7 @@ setup_ASMD.sh script configures Adaptative Steered Molecular Dynamics:
 - Creates input files for the required number of trajectories per stage under NVT ensemble.
 - It uses Amber atom mask. You don't have to manually configure atoms' id.
 - Thanks to T. Dwight McGee Jr., Hailey Bureau, Caley Allen, Rigoberto Hernandez for providing ASMD.py script in
-<https://ambermd.org/tutorials/advanced/tutorial26/> tutorial. **ASMD.py provided here supports python3** but I haven't extensely tested. Use at your own risk.
+<https://ambermd.org/tutorials/advanced/tutorial26/> tutorial. **ASMD.py provided here supports python3** but I haven't extensively tested (I used Python 3.13.3).
 ### Requirements
 - A working directory containing:
   - ASMD.py python script (provided ![here](ASMD.py)), which requires numpy package.
