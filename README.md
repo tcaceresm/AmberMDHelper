@@ -173,3 +173,6 @@ WDPATH
 ├── SMD_LIG_ATOMS.pdb
 └── SMD_PROT_ATOMS.pdb
 ```
+## run_ASMD.sh
+
+Basic info will be available soon.
