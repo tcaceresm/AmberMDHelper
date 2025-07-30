@@ -157,6 +157,17 @@ stage_1/
 ```
 
 ### Check SMD atoms
-In order to check which atoms are being used in ASMD, check --create_pdb option. If used, it creates PDB files for complex, ligand and protein atoms.
+In order to check which atoms are being used in ASMD, check ```--create_pdb``` option. If used, it creates PDB files for complex, ligand and protein atoms.
 You can easily visualize this in programs like PyMol.
+Example:
+```
+bash setup_ASMD.sh --create_pdb -p solvated_complex.parm7 -c equil_coord.rst7 --prot_mask :358 --lig_mask :560 --pull_length 30 --stages 3 --n_traj 2
+```
+Output
 
+```
+WDPATH
+├── COMPLEX.pdb
+├── SMD_LIG_ATOMS.pdb
+└── SMD_PROT_ATOMS.pdb
+```
