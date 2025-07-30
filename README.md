@@ -172,4 +172,38 @@ WDPATH
 ```
 ## run_ASMD.sh
 
-Basic info will be available soon.
+### Usage
+Use ```-h```, ```--help``` options to show script help.
+```bash
+bash setup_ASMD.sh --help # get help.
+```
+Output:
+
+```
+Required options:
+ --wd <path>                 : Working directory.
+ -p, --topo <file>           : Topology file.
+ -c, --coord <file>          : Equilibrated rst7 file.
+ --velocity <numeric>        : Pulling velocity (Å/ns).
+ --stages <integer>          : Number of stages.
+ --n_traj <integer>          : Number of trajectories per stage.
+ --force_k <numeric>         : Force constant (kcal * mol⁻¹ * Å⁻²).
+Optional:
+ --temp <numeric>            : (default=300). MD temperature.
+ --MD_prog <string>          : (default=pmemd.cuda). MD program (sander, pmemd.cuda, etc).
+ --only_process              : Only process SMD data.
+ --debug                     : Print details of variables used in this scripts.
+ --dry-run                   : Show run command.
+ -h, --help                  : Show this help.
+
+```
+
+In the setup_ASMD.sh example, we configured ASMD with a velocity of 10 A/ns, 3 stages and 2 trajectories per stage.
+In order to run run_ASMD.sh script, we're going to use the same parameters, which are required options.
+
+```
+bash run_ASMD.sh --wd . --topo complex_solvated.parm7 \
+--coord equilibrated_complex.nc --velocity 10 \
+--stages 3 --n_traj 3 --force_k 7.2
+```
+
