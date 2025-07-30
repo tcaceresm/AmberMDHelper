@@ -9,7 +9,8 @@ setupMD.sh script is used to:
   - Creation of dry and solvated topologies.
 ### Requirements
 - Software:
-  - AmberTools
+  - AmberTools. Tested with version 24 and 25.
+  - Bash. Tested with ```GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)```
 - A working directory containing:
   - receptor folder: This folder must contain a single PDB file of the receptor.
   - ligands folder (optional: This folder must contain ligands files in mol2 format. Ligand must be already protonated.
