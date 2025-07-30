@@ -59,7 +59,6 @@ WDPATH
 └── receptor
     └── rec_name.pdb
 ```
-
 Below there is an example of folder structure created with setupMD script. This just create the directories.
 ```bash
 bash setup_MD.sh -d . -n 1 --prot_only 1 --prep_topology 0 --prep_rec 0 --prep_MD 0
@@ -147,7 +146,6 @@ Directories created
         ├── stage_1
         ├── stage_2
         └── stage_3
-
 ```
 where
 ```
@@ -155,7 +153,6 @@ stage_1/
 ├── SMD_distance_restraint_stage_1.RST
 ├── SMD_stage_1_traj_1.in
 └── SMD_stage_1_traj_2.in
-
 ```
 
 ### Check SMD atoms
