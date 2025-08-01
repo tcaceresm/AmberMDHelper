@@ -17,9 +17,9 @@ setup_MD.sh script configures conventional molecular dynamics simulations:
 Ligand and cofactor are optional.
 ### Requirements
 A working directory containing:
- - receptor folder: This folder must contain a single PDB file of the receptor.
- - ligands folder (optional: This folder must contain ligands files in mol2 format. Ligand must be already protonated.
- - cofactor folder (optional): This folder should contain a single cofactor file in mol2 format. Cofactor must be already protonated.
+ - ```receptor``` folder: This folder must contain a single PDB file of the receptor.
+ - ```ligands``` folder (optional): This folder must contain ligands files in mol2 format. Ligand must be already protonated.
+ - ```cofactor``` folder (optional): This folder should contain a single cofactor file in mol2 format. Cofactor must be already protonated.
 ### Usage
 Use ```-h```, ```--help``` options to show script help.
 ```bash
