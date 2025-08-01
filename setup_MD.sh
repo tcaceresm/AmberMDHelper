@@ -513,6 +513,7 @@ ParseAmberOptions() {
       'restraintmask' ) shift ; RESTRAINTMASK=$1 ;;
       'restraint_wt'  ) shift ; RESTRAINT_WT=$1 ;;
       'irest'         ) shift ; IREST=$1 ;;
+      'ntx'           ) shift ; NTX=$1 ;;
       'nstlim'        ) shift ; NSTLIM=$1 ;;
       'ntb'           ) shift ; NTB=$1 ;;
       'cut'           ) shift ; CUT=$1 ;;
@@ -763,7 +764,7 @@ function ProtocolMD() {
   CreateMinInput min1 restraintmask ":1-${TOTALRES}&!@H=" restraint_wt 25.0
   CreateMinInput min2 restraintmask ":1-${TOTALRES}&!@H=" restraint_wt 5.0
 
-  createMdInput md_nvt_ntr irest 0 ntb 1 nstlim 25000 \
+  createMdInput md_nvt_ntr irest 0 ntx 1 ntb 1 nstlim 25000 \
                 ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 5.0 \
                 varycond 'TEMP0' 0 20000 100.0 300.0 \
                 tempi 100
