@@ -44,7 +44,7 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
   echo " --prep_lig         <0|1>        (default=0) Prepare ligand. Ligand MUST be already protonated."
   echo " --include_cof      <0|1>        (default=0) Include cofactor."
   echo " --prep_cof         <0|1>        (default=0) Prepare cofactor if --include_cof 1. Cofactor MUST be already protonated."
-  echo " --prep_topology    <0|1>        (default=0) Prepare topology files."
+  echo " --prep_topology    <0|1>        (default=1) Prepare topology files."
   echo " --prep_MD          <0|1>        (default=1) Prepare MD input files."
   echo " --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1."
   echo " --charge_method    <string>     (default="bcc") Charge method if --calc_lig_charge 1."
