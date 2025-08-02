@@ -180,6 +180,8 @@ function RunProtocol() {
 # Main
 ############################################################
 
+WDDIR=$(realpath "$WDDIR")
+
 RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
