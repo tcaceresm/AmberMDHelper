@@ -53,7 +53,7 @@ RUN_EQUI=1
 RUN_PROD=1
 START_REPLICA=1
 ENSEMBLE="npt"
-MD_PROG="pmemd_cuda"
+MD_PROG="pmemd.cuda"
 
 
 # CLI option parser
