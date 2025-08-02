@@ -149,17 +149,17 @@ function RunProtocol() {
     cd ${EQUI_DIR}
 
     # Can adjust this to your needs
-    RunMD min1 restart "${CRD}.rst7" 
-    RunMD min2 restart min1
+    RunMD min1 "${CRD}.rst7" 
+    RunMD min2 min1
 
-    RunMD md_nvt_ntr restart min2
-    RunMD npt_equil_1 restart md_nvt_ntr
+    RunMD md_nvt_ntr min2
+    RunMD npt_equil_1 md_nvt_ntr
 
-    RunMD npt_equil_2 restart npt_equil_1 
-    RunMD npt_equil_3 restart npt_equil_2
-    RunMD npt_equil_4 restart npt_equil_3
-    RunMD npt_equil_5 restart npt_equil_4
-    RunMD npt_equil_6 restart npt_equil_5
+    RunMD npt_equil_2 npt_equil_1 
+    RunMD npt_equil_3 npt_equil_2
+    RunMD npt_equil_4 npt_equil_3
+    RunMD npt_equil_5 npt_equil_4
+    RunMD npt_equil_6 npt_equil_5
     
     cd ${WDDIR}
 
@@ -169,7 +169,7 @@ function RunProtocol() {
     # Can adjust this to your needs
     cd ${PROD_DIR}
 
-    RunMD md_prod restart npt_equil_6
+    RunMD md_prod npt_equil_6
     
     cd ${WDDIR}
   fi
