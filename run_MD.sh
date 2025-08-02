@@ -150,7 +150,7 @@ function RunProtocol() {
     cd ${EQUI_DIR}
 
     # Can adjust this to your needs
-    RunMD min1 "${CRD}.rst7" 
+    RunMD min1 "${CRD}" 
     RunMD min2 min1
 
     RunMD md_nvt_ntr min2
