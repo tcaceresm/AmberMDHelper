@@ -89,8 +89,8 @@ function ParseDirectories() {
   shift
 
   if [[ "$mode" == "prot_only" ]]; then
-    CRD=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/topo/${RECEPTOR_NAME}_solv
-    TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/topo/${RECEPTOR_NAME}_solv
+    CRD=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/topo/*${RECEPTOR_NAME}_solv*
+    TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/topo/*${RECEPTOR_NAME}_solv*
     EQUI_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/MD/rep${REP}/equi/${ENSEMBLE}
     PROD_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/MD/rep${REP}/prod/${ENSEMBLE}
     
@@ -101,8 +101,8 @@ function ParseDirectories() {
       echo "Error: ligand name is required for prot_lig mode"
       exit 1
     fi
-    CRD=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_solv
-    TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}topo/${lig}_solv
+    CRD=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_solv_com
+    TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}topo/${lig}_solv_com
     EQUI_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/equi/${ENSEMBLE}
     PROD_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/prod/${ENSEMBLE}
   fi
