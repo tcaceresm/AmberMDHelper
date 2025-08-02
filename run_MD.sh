@@ -132,7 +132,8 @@ function RunMD() {
     echo "Running ${INPUT_FILE}.in"
 
     ${MD_PROG} -O -i ${INPUT_FILE}.in -o ${INPUT_FILE}.out -p ${TOPO}.parm7 -x ${INPUT_FILE}.nc \
-              -r ${INPUT_FILE}.rst7 -c ${RESTART_FILE}.rst7 -ref ${CRD}.rst7 -inf ${INPUT_FILE}.info
+              -r ${INPUT_FILE}.rst7 -c ${RESTART_FILE}.rst7 -ref ${CRD}.rst7 -inf ${INPUT_FILE}.info \
+              || { echo "Error: ${MD_PROG} failed during ${INPUT_FILE}"; exit 1; }
 
     touch "${INPUT_FILE}_successful.tmp"
     echo "Done ${INPUT_FILE}."
