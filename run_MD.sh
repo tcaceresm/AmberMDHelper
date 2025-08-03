@@ -118,6 +118,7 @@ function RunMD() {
 
   # TOPO and CRD variable comes from ParseDirectories
   # Check if already run, or if finished incorrectly
+  # -ref flag is ignored when ntr is 0
   if [[ -f "${INPUT_FILE}.nc" && ! -f "${INPUT_FILE}_successful.tmp" ]]; then
     echo "${INPUT_FILE} output exists but didn't finished correctly".
     echo "Please check ${INPUT_FILE}.out"
@@ -149,7 +150,7 @@ function RunProtocol() {
 
     cd ${EQUI_DIR}
 
-    # Can adjust this to your needs
+    # Can adjust this to your needs, ensure to match the protocol used in setupMD.sh.
     RunMD min1 "${CRD}" 
     RunMD min2 min1
 
