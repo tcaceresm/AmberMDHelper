@@ -8,7 +8,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="0.0.1"
+  VERSION="1.0.0"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
