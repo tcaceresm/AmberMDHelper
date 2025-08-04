@@ -138,7 +138,7 @@ function RunASMD() {
     echo "Skipping."
   else
     ${MD_PROG} -O -i "${INPUT_NAME}.in" -p "${TOPO}" -c "${COORD}" -r "${INPUT_NAME}.rst7" -o "${INPUT_NAME}.out" -x "${INPUT_NAME}.nc" -inf "${INPUT_NAME}.info" \
-    || { echo "Error: ${MD_PROG} failed during ${INPUT_NAME}, skipping step but pay attention!" }
+    || echo "Error: ${MD_PROG} failed during ${INPUT_NAME}, skipping step but pay attention!"
   fi
 }
 
