@@ -171,7 +171,7 @@ function RunProtocol() {
     # Can adjust this to your needs
     cd ${PROD_DIR}
 
-    RunMD md_prod npt_equil_6
+    RunMD md_prod ${EQUI_DIR}/npt_equil_6
     
     cd ${WDDIR}
   fi
