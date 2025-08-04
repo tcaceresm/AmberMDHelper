@@ -496,7 +496,7 @@ quit
 EOF
 
   cd ${TOPO_DIR}
-  tleap -f ./tleap.in # check if finished correctly?
+  tleap -f ./tleap.in || { echo "Error: tleap failed during ${tleap_input}"; exit 1; }
   cd ${WDPATH}
 
 }
