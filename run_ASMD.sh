@@ -163,6 +163,11 @@ function ClosestTrajToJar() {
   BASENAME="${BASENAME/_work/}" # Parse name
   TRAJECTORY="${DIRNAME}/${BASENAME}.nc" # Closest traj to JAR
   REF_COORD="${DIRNAME}/${BASENAME}.rst7" # Restart file for next stage
+
+  if [[ ! -f ${REF_COORD} ]]; then
+    echo "Error: Closest traj to Jarzinsky average of stage ${STAGE} doesn't exist."
+    exit 1
+  fi
   
 }
 
@@ -272,11 +277,6 @@ for STAGE in $(seq 1 ${NUM_STAGES}); do
 
   ClosestWorkToJar ${STAGE}
   ClosestTrajToJar ${STAGE}
-  
-  if [[ ! -f ${REF_COORD} ]]; then
-    echo "Error: Closest traj to Jarzinsky average of stage ${STAGE} doesn't exist."
-    exit 1
-  fi
 
   cp ${TRAJECTORY} ${SMD_DIR}/JAR_trajectories/
 
