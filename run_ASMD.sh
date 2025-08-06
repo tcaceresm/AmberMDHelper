@@ -158,10 +158,11 @@ function ClosestTrajToJar() {
   # Set trajectory file for visualization
   STAGE=$1
   JAR_LOG=$(awk 'BEGIN { FS = ":" } {print $2}' ${STAGE_PATH}/JAR_stage_${STAGE}.log)
-  BASENAME="${JAR_LOG%.*}" # Parse: Delete file extension name
+  BASENAME=$(basename ${JAR_LOG})
+  DIRNAME=$(basename ${JAR_LOG})
   BASENAME="${BASENAME/_work/}" # Parse name
-  TRAJECTORY="${BASENAME}.nc" # Closest traj to JAR
-  REF_COORD="${BASENAME}.rst7" # Restart file for next stage
+  TRAJECTORY="${DIRNAME}/${BASENAME}.nc" # Closest traj to JAR
+  REF_COORD="${DIRNAME}/${BASENAME}.rst7" # Restart file for next stage
   
 }
 
