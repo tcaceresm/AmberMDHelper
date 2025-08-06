@@ -159,7 +159,7 @@ function ClosestTrajToJar() {
   STAGE=$1
   JAR_LOG=$(awk 'BEGIN { FS = ":" } {print $2}' ${STAGE_PATH}/JAR_stage_${STAGE}.log)
   BASENAME=$(basename ${JAR_LOG})
-  DIRNAME=$(basename ${JAR_LOG})
+  DIRNAME=$(dirname ${JAR_LOG})
   BASENAME="${BASENAME/_work/}" # Parse name
   TRAJECTORY="${DIRNAME}/${BASENAME}.nc" # Closest traj to JAR
   REF_COORD="${DIRNAME}/${BASENAME}.rst7" # Restart file for next stage
