@@ -3,7 +3,7 @@
 # To do: check if files already exists and add a --force option to rewrite existing files
 
 DATE="2025"
-VERSION="1.0.1"
+VERSION="1.0.2"
 GitHub_URL="https://github.com/tcaceresm/AmberMDHelper"
 LAB="http://schuellerlab.org/"
 
@@ -158,7 +158,7 @@ function ClosestTrajToJar() {
   # Set trajectory file for visualization
   STAGE=$1
   JAR_LOG=$(awk 'BEGIN { FS = ":" } {print $2}' ${STAGE_PATH}/JAR_stage_${STAGE}.log)
-  BASENAME=$(basename ${JAR_LOG})
+  BASENAME=$(basename ${JAR_LOG} .data)
   DIRNAME=$(dirname ${JAR_LOG})
   BASENAME="${BASENAME/_work/}" # Parse name
   TRAJECTORY="${DIRNAME}/${BASENAME}.nc" # Closest traj to JAR
