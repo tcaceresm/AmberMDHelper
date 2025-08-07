@@ -10,7 +10,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="1.0.0"
+  VERSION="1.0.1"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
@@ -72,7 +72,7 @@ PROCESS_THERMO=1
 REPLICAS=3
 START_REPLICA=1
 ENSEMBLE="npt"
-MASK=":1-${TOTALRES}@CA,C,N"
+
 
 # CLI option parser
 
@@ -101,6 +101,16 @@ function CheckProgram() {
   for COMMAND in "$@"; do
     if ! command -v ${1} >/dev/null 2>&1; then
       echo "Error: ${1} program not available, exiting."
+      exit 1
+    fi
+  done
+}
+
+function CheckVariable() {
+  # Check if variable is not empty
+  for ARG in "$@"; do
+    if [[ -z ${ARG} ]]; then
+      echo "Error: variable ${ARG}."
       exit 1
     fi
   done
@@ -171,6 +181,10 @@ function RMSD() {
   local dir=$1
   local target=$2
   local mode=$3
+
+  if [[ -z ${MASK} ]]; then
+    MASK=":1-${TOTALRES}@CA,C,N"
+  fi
 
   cat > ${dir}/rmsd.in <<EOF
 parm ${DRY_TOPO}
@@ -253,6 +267,8 @@ function CheckUniqueFile() {
 ############################################################
 # Main
 ############################################################
+# Required options
+CheckVariable "${WDPATH}"
 
 WDDIR=$(realpath "$WDDIR")
 
