@@ -268,7 +268,7 @@ function CheckUniqueFile() {
 # Main
 ############################################################
 # Required options
-CheckVariable "${WDPATH}"
+CheckVariable "${WDDIR}"
 
 WDDIR=$(realpath "$WDDIR")
 
