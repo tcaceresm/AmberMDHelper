@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DATE="2025"
-VERSION="1.0.0"
+VERSION="1.1.0"
 GitHub_URL="https://github.com/tcaceresm/AmberMDHelper"
 LAB="http://schuellerlab.org/"
 
@@ -27,7 +27,9 @@ function Help() {
   echo " -c, --coord <file>          : Equilibrated rst7 file."
   echo " --prot_mask <AMBER MASK>    : AMBER mask of protein atoms."
   echo " --lig_mask <AMBER MASK>     : AMBER mask of ligand atoms."
-  echo " --pull_length <numeric>     : Total pull length (Å)."
+  echo " --pull_length <numeric>     : Total pull length (Å). Use positive or negative values to 
+                               increase or decrease distance between ligand and protein, respectively. 
+                               Ignored if --end_distance is provided."
   echo "Optional:"
   echo " --stages <integer>          : (default=5). Number of stages to split the reaction coordinate."
   echo " --n_traj <integer>          : (default=25). Number of trajectories per stage."
@@ -142,8 +144,9 @@ function Debug() {
 
 function PullLengthWrapper() {
   # Calculate pull length (absolute difference) with 3 decimal places
+  # Used when --end_distance is provided
   DIFF=$(echo "scale=5; $1 - $2" | bc)
-  ABS_DIFF=$(echo "scale=3; if (${DIFF} < 0) -1 * ${DIFF} else ${DIFF}" | bc)
+  ABS_DIFF=$(echo "scale=3; -1 * ${DIFF}" | bc)
   PULL_LENGTH="${ABS_DIFF}"
 }
 
@@ -151,7 +154,7 @@ function VelocityWrapper() {
   # Obtain mdsteps (nstlim) from velocity
   # PullLengthWrapper ${START_DIST} ${END_DIST}
   LENGTH_PER_STAGE=$(echo "scale=3; ${PULL_LENGTH} / ${NUM_STAGES}" | bc )
-  TIME_PER_STAGE=$(echo "scale=6; ${LENGTH_PER_STAGE} / ${VEL}" | bc)
+  TIME_PER_STAGE=$(echo "scale=6; sqrt(${LENGTH_PER_STAGE}^2) / ${VEL}" | bc)
   NSTLIM=$(echo "scale=0; (${TIME_PER_STAGE} * 1000) / ${DT}" | bc)
 }
 
