@@ -108,13 +108,14 @@ bash setup_ASMD.sh --help # get help.
 ```
 Output:
 
-```
-Required options:
+```Required options:
  -p, --topo <file>           : Topology file.
  -c, --coord <file>          : Equilibrated rst7 file.
  --prot_mask <AMBER MASK>    : AMBER mask of protein atoms.
  --lig_mask <AMBER MASK>     : AMBER mask of ligand atoms.
- --pull_length <numeric>     : Total pull length (Å).
+ --pull_length <numeric>     : Total pull length (Å). Use positive or negative values to 
+                               increase or decrease distance between ligand and protein, respectively. 
+                               Ignored if --end_distance is provided.
 Optional:
  --stages <integer>          : (default=5). Number of stages to split the reaction coordinate.
  --n_traj <integer>          : (default=25). Number of trajectories per stage.
