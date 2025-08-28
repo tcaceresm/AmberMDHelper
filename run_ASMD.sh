@@ -3,7 +3,7 @@
 # To do: check if files already exists and add a --force option to rewrite existing files
 
 DATE="2025"
-VERSION="1.0.2"
+VERSION="1.0.3"
 GitHub_URL="https://github.com/tcaceresm/AmberMDHelper"
 LAB="http://schuellerlab.org/"
 
@@ -133,12 +133,19 @@ function RunASMD() {
   
   if [[ ! -z ${DRY_RUN} ]]; then
     echo "${MD_PROG} -O -i ${INPUT_NAME}.in -p ${TOPO} -c ${COORD} -r ${INPUT_NAME}.rst7 -o ${INPUT_NAME}.out -x ${INPUT_NAME}.nc -inf ${INPUT_NAME}.info"
-  elif [[ -f "${INPUT_NAME}.nc" ]]; then
-    echo "${INPUT_NAME} already executed succesfully."
+
+  elif [[ -f "${INPUT_NAME}_successful.tmp" ]]; then
+    echo "${INPUT_NAME} already finished correctly."
     echo "Skipping."
+  elif [[ -f "${INPUT_NAME}.nc" && ! -f "${INPUT_NAME}_successful.tmp" ]]; then
+    echo "${INPUT_NAME} started but didn't finished correctly."
+    echo "Skipping."
+  
   else
     ${MD_PROG} -O -i "${INPUT_NAME}.in" -p "${TOPO}" -c "${COORD}" -r "${INPUT_NAME}.rst7" -o "${INPUT_NAME}.out" -x "${INPUT_NAME}.nc" -inf "${INPUT_NAME}.info" \
     || echo "Error: ${MD_PROG} failed during ${INPUT_NAME}, skipping step but pay attention!"
+
+    touch "${INPUT_NAME}_successful.tmp"
   fi
 }
 
@@ -192,7 +199,9 @@ function CreatePMF() {
         printf("%f\n", last_jar_work) > "/tmp/last_jar_work.txt"
       }
     ' "$jar_file" >> "${SMD_DIR}/PMF.data"
+
     ParseWorkData
+
     addval=$(cat /tmp/last_jar_work.txt)
 
   done
@@ -230,6 +239,24 @@ function ParseWorkData() {
         print coord, work, stage, traj
       }
     ' "$traj_work" >> "${SMD_DIR}/all_work.data"
+  done
+}
+function ParseForceData() {
+  # Process Force data of JAR trajectories
+
+  if [[ -f "${SMD_DIR}/JAR_FORCE.data" ]]; then
+    rm "${SMD_DIR}/JAR_FORCE.data"
+  fi
+  for STAGE in $(seq 1 ${NUM_STAGES}); do
+    local stage_path="${SMD_DIR}/stage_${STAGE}"
+    local jar_smd_output=$(awk 'BEGIN { FS = ":" } {print $2}' ${stage_path}/JAR_stage_${STAGE}.log)
+    awk -v stage="${stage}" '
+      {
+        coord = $1
+        force = $3
+        print coord, force
+      }
+    ' "${jar_smd_output}" >> "${SMD_DIR}/JAR_FORCE.data"
   done
 }
 # Path of this script
@@ -285,6 +312,7 @@ cd ${WD_PATH}
 done
 
 CreatePMF
+ParseForceData
 ConcatenateJarTrajectories
 
 echo "Done."
