@@ -47,7 +47,7 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
   echo " --prep_topology    <0|1>        (default=1) Prepare topology files."
   echo " --prep_MD          <0|1>        (default=1) Prepare MD input files."
   echo " --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1."
-  echo " --charge_method    <string>     (default="bcc") Charge method if --calc_lig_charge 1."
+  echo " --charge_method    <string>     (default="abcg2") Charge method if --calc_lig_charge 1."
   #echo " --threads          <integer>    (default=1) Number of threads to execute this scripts. This is relevant when preparing several systems."
   echo " --lig_ff           <gaff|gaff2> (default="gaff2") Small molecule forcefield. This applies both ligand and cofactor."
   echo " --prot_ff          <string>     (default="ff19SB") Protein forcefield."
@@ -68,7 +68,7 @@ PREP_COFACTOR=0
 PREP_TOPO=1
 PREP_MD=1
 COMPUTE_CHARGES=1
-CHARGE_METHOD="bcc"
+CHARGE_METHOD="abcg2"
 MMPBSA=0
 #NTHREADS=1
 ENSEMBLE="npt"
