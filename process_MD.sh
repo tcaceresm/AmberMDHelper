@@ -10,7 +10,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="1.0.1"
+  VERSION="1.0.2"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
@@ -213,9 +213,41 @@ EOF
 }
 
 function ThermodynamicsData() {
-  echo "PENE"
-}
+  # Read data from .out files.
+  local dir=$1
+  local mode=$2
 
+  if [[ ${mode} == "equi" ]]; then
+    local outName="equi"
+  else
+    local outName="prod"
+  fi
+
+  if [[ -f ${dir}/process_out.in ]]; then
+    rm ${dir}/process_out.in
+  fi
+  
+  cd ${dir}
+  local files
+  for file in md_nvt_ntr*.out npt_equil*.out *md_prod*.out; do
+    echo "FILE IS ${file}"
+    if [ -f "${file}" ]; then
+      echo "readdata ${file} name OutputData" >> ${dir}/process_out.in
+    fi
+done
+
+  cat >> ${dir}/process_out.in <<EOF
+writedata ${outName}_Density.data OutputData[Density]
+writedata ${outName}_Etot.data OutputData[EKtot]
+writedata ${outName}_Temp.data OutputData[TEMP]
+writedata ${outName}_Press.data OutputData[PRESS]
+writedata ${outName}_Volume.data OutputData[VOLUME]
+EOF
+
+  cpptraj -i "${dir}/process_out.in" || echo "Error with ThermodynamicsData(). Exiting."; exit 1
+  cd ${WDDIR}
+}
+  
 function Process() {
   mode=$1
   target=$2
@@ -231,7 +263,7 @@ function Process() {
     fi
 
     if [[ ${PROCESS_THERMO} -eq 1 ]]; then
-      ThermodynamicsData
+      ThermodynamicsData ${EQUI_DIR} "equi"
     fi
   fi
 
@@ -246,7 +278,7 @@ function Process() {
     fi
 
     if [[ ${PROCESS_THERMO} -eq 1 ]]; then
-      ThermodynamicsData
+      ThermodynamicsData ${PROD_DIR} "prod"
     fi
 
   fi
