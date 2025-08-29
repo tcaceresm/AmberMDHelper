@@ -43,7 +43,7 @@ Optional:
  --prep_topology    <0|1>        (default=0) Prepare topology files.
  --prep_MD          <0|1>        (default=1) Prepare MD input files.
  --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1.
- --charge_method    <string>     (default=bcc) Charge method if --calc_lig_charge 1.
+ --charge_method    <string>     (default=abcg2) Charge method if --calc_lig_charge 1.
  --lig_ff           <gaff|gaff2> (default=gaff2) Small molecule forcefield. This applies both ligand and cofactor.
  --prot_ff          <string>     (default=ff19SB) Protein forcefield.
  --water_model      <string>     (default=opc) Water model used in MD.
