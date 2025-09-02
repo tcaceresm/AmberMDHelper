@@ -604,9 +604,9 @@ function createMdInput() {
     NTX=1
   fi
   
-  NTPR=100
-  NTWX=1000
-  NTWR=1000
+  NTPR=5000
+  NTWX=5000
+  NTWR=5000
 
   NTF=2
   CUT=10.0
