@@ -8,7 +8,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="1.0.1"
+  VERSION="1.1.1"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
@@ -53,6 +53,7 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
   echo " --prot_ff          <string>     (default="ff19SB") Protein forcefield."
   echo " --water_model      <string>     (default="opc") Water model used in MD."
   echo " --box_size         <integer>    (default=14) Size of water box."
+  echo " --mmpbsa           <0|1>        (default=0) Prepare MM/PBSA input file."
 }
 
 # Default values
@@ -787,8 +788,25 @@ function ProtocolMD() {
 
 }
 
-function PrepareMMPBSARescoring() {
-  mmpbsa_rescoring_dir=$1
+function PrepareMMPBSA() {  
+  local mmpbsa_rescoring_dir=$1
+  local startframe=$2
+  local endframe=$3
+  local lig=$4
+
+  #echo -e "\n Preparing MMPBSA input file"
+  mkdir -p ${mmpbsa_rescoring_dir}
+
+  cat > ${mmpbsa_rescoring_dir}/mm_pbsa.in <<EOF
+Input file for PB calculation
+&general
+startframe=1, endframe=1, interval=1,
+verbose=2, keep_files=0, netcdf=1,
+/
+&pb
+istrng=0.15, fillratio=4.0,
+/
+EOF
 
 }
 ############################################################
@@ -920,6 +938,10 @@ if [[ ${PREP_MD} -eq 1 ]]; then
         PROD_DIR="${MODE_DIR}/MD/rep${REP}/prod/${ENSEMBLE}"
 
         ProtocolMD ${EQUI_DIR} ${PROD_DIR} ${TOTALRES} ${NSTLIM_EQUI} ${NSTLIM_PROD}
+
+        if [[ ${MMPBSA} == 1 ]]; then
+          PrepareMMPBSA ${LIGAND_NAME} ${EQUI_DIR}/mmpbsa/ 1 1
+        fi
 
       done
     done
