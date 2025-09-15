@@ -6,6 +6,8 @@
 # try using global variables directly, however, this is harder to
 # read and debug.
 
+#set -x 
+
 function ScriptInfo() {
   DATE="2025"
   VERSION="1.1.1"
@@ -53,7 +55,7 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
   echo " --prot_ff          <string>     (default="ff19SB") Protein forcefield."
   echo " --water_model      <string>     (default="opc") Water model used in MD."
   echo " --box_size         <integer>    (default=14) Size of water box."
-  echo " --mmpbsa           <0|1>        (default=0) Prepare MM/PBSA input file."
+  echo " --mmpbsa_rescoring <0|1>        (default=0) Prepare MM/PBSA rescoring input files. --prot_lig must be 1."
 }
 
 # Default values
@@ -95,7 +97,7 @@ while [[ $# -gt 0 ]]; do
   '--prep_MD'                ) shift ; PREP_MD=$1 ;;
   '--calc_lig_charge'        ) shift ; COMPUTE_CHARGES=$1 ;;
   '--charge_method'          ) shift ; CHARGE_METHOD=$1 ;;
-  '--mmpbsa'                 ) shift ; MMPBSA=$1 ;;
+  '--mmpbsa_rescoring'       ) shift ; MMPBSA=$1 ;;
   '--threads'                ) shift ; NTHREADS=$1 ;;
   '--lig_ff'                 ) shift ; LIG_FF=$1 ;;
   '--prot_ff'                ) shift ; PROT_FF=$1 ;;
@@ -426,6 +428,8 @@ function PrepareTopology() {
 
   echo -e "\n# Preparing Topologies #"
   
+  cd ${TOPO_DIR}
+
   # Create common info leap
   local tleap_input="${TOPO_DIR}/tleap.in"
   cat <<EOF > ${tleap_input}
@@ -446,8 +450,10 @@ EOF
   fi
 
   # Add ligand
-  if [[ ! -z "${LIG}" ]]; then 
-  cat <<EOF >> ${tleap_input}
+  if [[ ! -z "${LIG}" ]]; then
+    CheckFiles "${LIG_LIB_DIR}/${LIG}.lib" "${LIG_LIB_DIR}/${LIG}.frcmod" \
+               "${LIG_LIB_DIR}/${LIG}_lig.pdb"
+    cat <<EOF >> ${tleap_input}
 
 loadoff ${LIG_LIB_DIR}/${LIG}.lib
 loadAmberParams ${LIG_LIB_DIR}/${LIG}.frcmod
@@ -459,6 +465,7 @@ EOF
 
   # Add Rec step 1
   # Because rec is receptor + cof in prot_lig
+  CheckFiles "${PREP_PDB_DIR}/${RECEPTOR_NAME}_prep.pdb"
   cat <<EOF >> ${tleap_input}
 
 rec = loadpdb ${PREP_PDB_DIR}/${RECEPTOR_NAME}_prep.pdb
@@ -496,7 +503,7 @@ saveAmberParm ${TARGET} ./${TOPO_NAME}_solv_${TARGET}.parm7 ./${TOPO_NAME}_solv_
 quit
 EOF
 
-  cd ${TOPO_DIR}
+  #cd ${TOPO_DIR}
   tleap -f ./tleap.in || { echo "Error: tleap failed during ${tleap_input}"; exit 1; }
   cd ${WDPATH}
 
@@ -721,6 +728,9 @@ function ThermostatWrapper() {
 function TotalResWrapper() {
   # Obtain total residue of solute, using dry topology.
   TOPO=$1
+
+  CheckFiles ${TOPO}
+
   TOTALRES=$(cpptraj -p ${TOPO} --resmask \* | tail -n 1 | awk '{print $1}')
 }
 
@@ -788,19 +798,32 @@ function ProtocolMD() {
 
 }
 
-function PrepareMMPBSA() {  
-  local mmpbsa_rescoring_dir=$1
-  local startframe=$2
-  local endframe=$3
-  local lig=$4
+function PrepareMMPBSA() {
+  # Protocol for MM/PBSA rescoring
+  # set two step minimization
+  # As it does not require MD, I use a different folder than MD
 
-  #echo -e "\n Preparing MMPBSA input file"
-  mkdir -p ${mmpbsa_rescoring_dir}
+  local mmpbsa_dir=$1
+  local totalres=$2
+  local startframe=$3
+  local endframe=$4
+  local interval=$5
 
-  cat > ${mmpbsa_rescoring_dir}/mm_pbsa.in <<EOF
+  mkdir -p ${mmpbsa_dir}
+  
+  cd ${mmpbsa_dir}
+
+  # Minimization
+
+  CreateMinInput min1 restraintmask ":1-${totalres}&!@H=" restraint_wt 25.0
+  CreateMinInput min2 restraintmask ":1-${totalres}&!@H=" restraint_wt 5.0
+  
+  # MMPBSA input file
+
+  cat > ${mmpbsa_dir}/mm_pbsa.in <<EOF
 Input file for PB calculation
 &general
-startframe=1, endframe=1, interval=1,
+startframe=${startframe}, endframe=${endframe}, interval=${interval},
 verbose=2, keep_files=0, netcdf=1,
 /
 &pb
@@ -808,7 +831,10 @@ istrng=0.15, fillratio=4.0,
 /
 EOF
 
+  cd ${WDPATH}
+
 }
+
 ############################################################
 # Main script
 ############################################################
@@ -889,8 +915,10 @@ if [[ ${PREP_TOPO} -eq 1 ]]; then
     TopologyParser "mode" "prot_only"
 
     PrepareTopology
+  
+  fi
 
-  elif [[ ${PROT_LIG_MD} -eq 1 ]]; then
+  if [[ ${PROT_LIG_MD} -eq 1 ]]; then
     for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
       TopologyParser  "mode" "prot_lig" "lig" ${LIGAND_NAME}
       PrepareTopology 
@@ -922,32 +950,36 @@ if [[ ${PREP_MD} -eq 1 ]]; then
     
     echo -e "\nDone creating MD files for prot only."
   fi
+fi
 
-  if [[ ${PROT_LIG_MD} -eq 1 ]]; then
-    
-    LigParser
-    
-    for REP in $(seq 1 ${REPLICAS}); do
-      for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
+if [[ ${PROT_LIG_MD} -eq 1 ]]; then
+  
+  LigParser
+  
+  for REP in $(seq 1 ${REPLICAS}); do
+    for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
 
-        TopologyParser "mode" "prot_lig" "lig" ${LIGAND_NAME}
-        TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
+      TopologyParser "mode" "prot_lig" "lig" ${LIGAND_NAME}
+      TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
 
-        MODE_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
-        EQUI_DIR="${MODE_DIR}/MD/rep${REP}/equi/${ENSEMBLE}"
-        PROD_DIR="${MODE_DIR}/MD/rep${REP}/prod/${ENSEMBLE}"
+      MODE_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
+      EQUI_DIR="${MODE_DIR}/MD/rep${REP}/equi/${ENSEMBLE}"
+      PROD_DIR="${MODE_DIR}/MD/rep${REP}/prod/${ENSEMBLE}"
 
+      if [[ ${PREP_MD} -eq 1 ]]; then
         ProtocolMD ${EQUI_DIR} ${PROD_DIR} ${TOTALRES} ${NSTLIM_EQUI} ${NSTLIM_PROD}
+        echo -e "\nDone creating MD files for prot-lig."
+      fi
 
-        if [[ ${MMPBSA} == 1 ]]; then
-          PrepareMMPBSA ${LIGAND_NAME} ${EQUI_DIR}/mmpbsa/ 1 1
-        fi
+      if [[ ${MMPBSA} == 1 && ${REP} -eq 1 ]]; then
+      # MMPBSA rescoring don't need replicas
+        PrepareMMPBSA "${MODE_DIR}/mmpbsa_rescore/" ${TOTALRES} 1 1 1
+        echo -e "\nDone creating ${LIGAND_NAME} MMPBSA files for prot-lig replica ${REP}."
+      fi
 
-      done
     done
-
-    echo -e "\nDone creating MD files for prot-lig."
-  fi
+  done
 
 fi
+
 ## ====== End Create MD files ======
