@@ -10,7 +10,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="1.1.1"
+  VERSION="1.2.1"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
@@ -43,8 +43,8 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
   echo " --run_prod         <0|1>        (default=1) Run production phase."
   echo " -n, --replicas     <integer>    (default=3) Number of replicas or repetitions."
   echo " --start_replica    <integer>    (default=1) Run from --start_replica to --replicas."
-  echo " --mmpbsa_rescoring <0|1>        (default=0) Run MM/PBSA calculations."
-  echo " --mmpbsa_crd       <file>       (NoDefault) Coordinates used for MM/PBSA calculations."   
+  echo " --mmpbsa_rescoring <0|1>        (default=0) Run MM/PBSA rescoring."
+  #echo " --mmpbsa_crd      <file>       (NoDefault) Coordinates used for MM/PBSA calculations."   
   echo " --MD_prog          <str>        (default="pmemd.cuda") Program used to run MD."
 }
 
@@ -112,6 +112,7 @@ function ParseDirectories() {
   elif [[ "$mode" == "prot_lig" ]]; then
 
     local lig=$1
+
     if [[ -z "${lig}" ]]; then
       echo "Error: ligand name is required for prot_lig mode"
       exit 1
@@ -121,8 +122,8 @@ function ParseDirectories() {
     EQUI_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/equi/${ENSEMBLE}
     PROD_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/prod/${ENSEMBLE}
 
-    # For mmpbsa
-
+    # For mmpbsa_rescoring
+    MMPBSA_rescore_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/mmpbsa/
     VAC_COMPLEX_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_com
     VAC_REC_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_rec
     VAC_LIG_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_lig
@@ -167,9 +168,12 @@ function RunProtocol() {
   # DIRs comes from ParseDirectorioes
   # RunMD is the function that perform MD
 
-  if [[ ${RUN_EQUI} -eq 1 ]]; then
+  local mode=$1
+  local dir=$2
 
-    cd ${EQUI_DIR}
+  if [[ ${mode} -eq "equi" ]]; then
+
+    cd ${dir}
 
     # Can adjust this to your needs, ensure to match the protocol used in setupMD.sh.
     RunMD min1 "${CRD}" 
@@ -188,9 +192,9 @@ function RunProtocol() {
 
   fi
 
-  if [[ ${RUN_PROD} -eq 1 ]]; then
+  if [[ ${mode} -eq "prod" ]]; then
     # Can adjust this to your needs
-    cd ${PROD_DIR}
+    cd ${dir}
 
     RunMD md_prod ${EQUI_DIR}/npt_equil_6
     
@@ -218,7 +222,7 @@ function MMPBSA() {
 
 }
 
-function ProcessMMPBSA_CRD () {
+function ProcessMMPBSACoord () {
   local crd=$1
   local topo=$2
 
@@ -234,20 +238,22 @@ EOF
 
 }
 
-function RunMMPBSA_RescoringProtocol() {
+function RunMMPBSArescoreProtocol() {
 
-  cd ${EQUI_DIR}
+  local mmpbsa_dir=$1
+  local input_crd=$2
+
 
   # Two-step minimization
   RunMD min1 "${CRD}" 
   RunMD min2 min1
 
-  ProcessMMPBSA_CRD min2.rst7 ${TOPO}
+  # Remove solvent and ions
+  ProcessMMPBSACoord ${input_crd} ${TOPO}
 
-  cd ${EQUI_DIR}/mmpbsa
+  cd ${MMPBSA_rescore_DIR}/mmpbsa
 
   local input_file="mm_pbsa.in"
-  local input_crd="min2_noWAT.rst7"
   local complex_topo=${VAC_COMPLEX_TOPO}
   local receptor_topo=${VAC_REC_TOPO}
   local ligand_topo=${VAC_LIG_TOPO}
@@ -271,7 +277,15 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
     ParseDirectories "prot_only"
-    RunProtocol
+
+    if [[ ${RUN_EQUI} -eq 1 ]]; then
+      RunProtocol "equi" ${EQUI_DIR}
+    fi
+
+    if [[ ${RUN_PROD} -eq 1 ]]; then
+      RunProtocol "prod" ${PROD_DIR}
+    fi
+
   fi
 
   if [[ ${PROT_LIG_MD} -eq 1 ]]; then
@@ -284,12 +298,24 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     fi
 
     for LIG_NAME in ${LIGANDS_PATH[@]}; do
+
+      # Required for both MD and MMPBSA
       LIG_NAME=$(basename ${LIG_NAME} .mol2)
+
       ParseDirectories "prot_lig" ${LIG_NAME}
-      RunProtocol
+      
+      # MD
+
+      if [[ ${RUN_EQUI} -eq 1 ]]; then
+        RunProtocol "equi" ${EQUI_DIR}
+      fi
+
+      if [[ ${RUN_PROD} -eq 1 ]]; then
+        RunProtocol "prod" ${PROD_DIR}
+      fi
 
       if [[ ${MMPBSA} -eq 1 ]]; then
-        RunMMPBSARescoringProtocol
+        RunMMPBSArescoreProtocol ${MMPBSA_rescore_DIR} "min2_noWAT.rst7"
       fi
     done
 
