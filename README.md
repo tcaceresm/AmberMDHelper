@@ -1,6 +1,7 @@
 ![logo](image.png)
 # AmberMDHelper
 Scripts used to setup molecular dynamics simulations using AMBER software.
+_UPCOMING_: Setup MM/PBSA rescoring.
 ## Software requirements
 - Software:
   - Linux environment.
