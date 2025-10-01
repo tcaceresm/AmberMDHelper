@@ -194,7 +194,7 @@ average crdset Avg
 EOF
   if [[ ${mode} == "prot_lig" ]]; then
     cat >> ${dir}/rmsd.in <<EOF
-rms first out ${LIG_NAME}_rmsd_LIG_noWAT.data :${TOTALRES}&!@H=
+rms first out ${LIG_NAME}_rmsd_LIG_noWAT.data :${TOTALRES}&!@H= nofit
 EOF
   fi
   cat >> ${dir}/rmsd.in <<EOF
