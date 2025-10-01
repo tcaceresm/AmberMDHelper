@@ -189,11 +189,11 @@ function RMSD() {
   cat > ${dir}/rmsd.in <<EOF
 parm ${DRY_TOPO}
 trajin ./noWAT_traj.nc
-rms first out ${target}_rmsd_noWAT.data "${MASK}" perres perresout ${target}_rmsd_perres_noWAT.data range 1-${TOTALRES} perresmask @CA,C,N
+rms first out ${target}_rmsd_noWAT.data "${MASK}" perres perresout ${target}_rmsd_perres_noWAT.data range 1-${TOTALRES} perresmask "${MASK}"
 average crdset Avg
 EOF
   if [[ ${mode} == "prot_lig" ]]; then
-    cat >> ./rmsd.in <<EOF
+    cat >> ${dir}/rmsd.in <<EOF
 rms first out ${LIG_NAME}_rmsd_LIG_noWAT.data :${TOTALRES}&!@H=
 EOF
   fi
@@ -203,13 +203,14 @@ rms ref Avg
 atomicfluct out ${target}_rmsf_noWAT.data "${MASK}" byres
 EOF
   if [[ ${mode} == "prot_lig" ]]; then
-    cat >> ./rmsd.in <<EOF
+    cat >> ${dir}/rmsd.in <<EOF
 atomicfluct out ${LIG_NAME}_rmsf_LIG_noWAT.data :${TOTALRES}&!@H= byres
 EOF
   fi
   cd ${dir}
   cpptraj -i ./rmsd.in || { echo "Error: cpptraj failed during RMSD"; exit 1; }
   cd ${WDDIR}
+
 }
 
 function ThermodynamicsData() {
@@ -228,9 +229,8 @@ function ThermodynamicsData() {
   fi
   
   cd ${dir}
-  local files
+  local file
   for file in md_nvt_ntr*.out npt_equil*.out *md_prod*.out; do
-    echo "FILE IS ${file}"
     if [ -f "${file}" ]; then
       echo "readdata ${file} name OutputData" >> ${dir}/process_out.in
     fi
@@ -244,7 +244,7 @@ writedata ${outName}_Press.data OutputData[PRESS]
 writedata ${outName}_Volume.data OutputData[VOLUME]
 EOF
 
-  cpptraj -i "${dir}/process_out.in" || echo "Error with ThermodynamicsData(). Exiting."; exit 1
+  cpptraj -i "${dir}/process_out.in" || { echo "Error with ThermodynamicsData(). Exiting."; exit 1; }
   cd ${WDDIR}
 }
   
