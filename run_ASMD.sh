@@ -222,22 +222,6 @@ function CreatePMF() {
   rm -f /tmp/last_work.txt
 }
 
-function ConcatenateJarTrajectories() {
-  # Concatenate the closest trajectory to Jar of each stage.
-  JAR_DIR=${SMD_DIR}/JAR_trajectories/
-
-  CheckProgram cpptraj
-
-  cpptraj <<EOF 1>/dev/null
-  parm ${TOPO}
-  trajin ${JAR_DIR}/*SMD*.nc
-  autoimage
-  strip :WAT,Na+,Cl- parmout ${JAR_DIR}/JAR_traj_noWAT.parm7
-  trajout ${JAR_DIR}/JAR_traj_noWAT.nc
-  run
-EOF
-}
-
 function ParseWorkData() {
   # Process Work data of all trajectories
   # The idea is plot like this https://ambermd.org/tutorials/advanced/tutorial26/images/pmf_fan.png
@@ -271,6 +255,26 @@ function ParseForceData() {
       }
     ' "${jar_smd_output}" >> "${SMD_DIR}/JAR_FORCE.data"
   done
+}
+
+function ConcatenateJarTrajectories() {
+  # Concatenate the closest trajectory to Jar of each stage.
+  JAR_DIR=${SMD_DIR}/JAR_trajectories/
+
+  CheckProgram cpptraj
+
+  cpptraj > ${JAR_DIR}/concatenate.in <<EOF
+  parm ${TOPO}
+  $(for traj in $(ls -v ${JAR_DIR}/*SMD_stage_*.nc); do
+      echo "trajin ${traj}"
+  done)
+  autoimage
+  strip :WAT,Na+,Cl- parmout ${JAR_DIR}/JAR_traj_noWAT.parm7
+  trajout ${JAR_DIR}/JAR_traj_noWAT.nc
+  run
+EOF
+  cd ${JAR_DIR}
+  cpptraj -i ${JAR_DIR}/concatenate.in
 }
 # Path of this script
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
