@@ -3,7 +3,7 @@
 # To do: check if files already exists and add a --force option to rewrite existing files
 
 DATE="2025"
-VERSION="1.0.3"
+VERSION="1.0.4"
 GitHub_URL="https://github.com/tcaceresm/AmberMDHelper"
 LAB="http://schuellerlab.org/"
 
@@ -129,23 +129,36 @@ function RunASMD() {
   TRAJ=$3
   INPUT_NAME=$4
   CheckProgram ${MD_PROG}
-  echo "Doing ASMD stage: ${STAGE}, trajectory: ${TRAJ}, input coord: ${COORD}, stage_path=${STAGE_PATH}" | tee "${INPUT_NAME}.log"
-  
+
+  CheckFiles ${INPUT_NAME}.in
+    
   if [[ ! -z ${DRY_RUN} ]]; then
     echo "${MD_PROG} -O -i ${INPUT_NAME}.in -p ${TOPO} -c ${COORD} -r ${INPUT_NAME}.rst7 -o ${INPUT_NAME}.out -x ${INPUT_NAME}.nc -inf ${INPUT_NAME}.info"
 
   elif [[ -f "${INPUT_NAME}_successful.tmp" ]]; then
     echo "${INPUT_NAME} already finished correctly."
     echo "Skipping."
-  elif [[ -f "${INPUT_NAME}.nc" && ! -f "${INPUT_NAME}_successful.tmp" ]]; then
-    echo "${INPUT_NAME} started but didn't finished correctly."
-    echo "Skipping."
-  
-  else
-    ${MD_PROG} -O -i "${INPUT_NAME}.in" -p "${TOPO}" -c "${COORD}" -r "${INPUT_NAME}.rst7" -o "${INPUT_NAME}.out" -x "${INPUT_NAME}.nc" -inf "${INPUT_NAME}.info" \
-    || echo "Error: ${MD_PROG} failed during ${INPUT_NAME}, skipping step but pay attention!"
 
-    touch "${INPUT_NAME}_successful.tmp"
+  else
+
+    if [[ -f "${INPUT_NAME}.nc" && ! -f "${INPUT_NAME}_successful.tmp" ]]; then
+      echo "${INPUT_NAME} started but didn't finish correctly. Retrying..." | tee "${INPUT_NAME}.log"
+    fi
+
+    echo -e "Doing ASMD stage: ${STAGE},\ntrajectory: ${TRAJ},\ninput coord: ${COORD},\nstage_path=${STAGE_PATH}" | tee -a "${INPUT_NAME}.log"
+    while true; do 
+      ${MD_PROG} -O -i "${INPUT_NAME}.in" -p "${TOPO}" -c "${COORD}" \
+                 -r "${INPUT_NAME}.rst7" -o "${INPUT_NAME}.out" \
+                 -x "${INPUT_NAME}.nc" -inf "${INPUT_NAME}.info" 
+
+      if [[ $? -eq 0 ]]; then
+        touch "${INPUT_NAME}_successful.tmp"
+        break
+      else
+        echo "Error: ${MD_PROG} failed during ${INPUT_NAME}." | tee -a "${INPUT_NAME}.log"
+        echo "Trying again..." | tee -a "${INPUT_NAME}.log"
+      fi
+    done
   fi
 }
 
@@ -209,22 +222,6 @@ function CreatePMF() {
   rm -f /tmp/last_work.txt
 }
 
-function ConcatenateJarTrajectories() {
-  # Concatenate the closest trajectory to Jar of each stage.
-  JAR_DIR=${SMD_DIR}/JAR_trajectories/
-
-  CheckProgram cpptraj
-
-  cpptraj <<EOF 1>/dev/null
-  parm ${TOPO}
-  trajin ${JAR_DIR}/*SMD*.nc
-  autoimage
-  strip :WAT,Na+,Cl- parmout ${JAR_DIR}/JAR_traj_noWAT.parm7
-  trajout ${JAR_DIR}/JAR_traj_noWAT.nc
-  run
-EOF
-}
-
 function ParseWorkData() {
   # Process Work data of all trajectories
   # The idea is plot like this https://ambermd.org/tutorials/advanced/tutorial26/images/pmf_fan.png
@@ -258,6 +255,26 @@ function ParseForceData() {
       }
     ' "${jar_smd_output}" >> "${SMD_DIR}/JAR_FORCE.data"
   done
+}
+
+function ConcatenateJarTrajectories() {
+  # Concatenate the closest trajectory to Jar of each stage.
+  JAR_DIR=${SMD_DIR}/JAR_trajectories/
+
+  CheckProgram cpptraj
+
+  cpptraj > ${JAR_DIR}/concatenate.in <<EOF
+  parm ${TOPO}
+  $(for traj in $(ls -v ${JAR_DIR}/*SMD_stage_*.nc); do
+      echo "trajin ${traj}"
+  done)
+  autoimage
+  strip :WAT,Na+,Cl- parmout ${JAR_DIR}/JAR_traj_noWAT.parm7
+  trajout ${JAR_DIR}/JAR_traj_noWAT.nc
+  run
+EOF
+  cd ${JAR_DIR}
+  cpptraj -i ${JAR_DIR}/concatenate.in
 }
 # Path of this script
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

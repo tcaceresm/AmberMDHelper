@@ -10,7 +10,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="1.0.1"
+  VERSION="1.2.1"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
@@ -34,7 +34,7 @@ Help() {
 and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of ligands and cofactor, respectively.\n"
 
   echo "Required options:"
-  echo " -d, --work_dir     <DIR>       Working directory. Inside this directory, a folder named setupMD should exist, containing all input files."
+  echo " -d, --work_dir     <DIR>        Working directory. Inside this directory, a folder named setupMD should exist, containing all input files."
   echo "Optional:"
   echo " -h, --help                      Show this help."
   echo " --prot_only        <0|1>        (default=0) Run only-protein MD."
@@ -43,6 +43,8 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
   echo " --run_prod         <0|1>        (default=1) Run production phase."
   echo " -n, --replicas     <integer>    (default=3) Number of replicas or repetitions."
   echo " --start_replica    <integer>    (default=1) Run from --start_replica to --replicas."
+  echo " --mmpbsa_rescoring <0|1>        (default=0) Run MM/PBSA rescoring."
+  #echo " --mmpbsa_crd      <file>       (NoDefault) Coordinates used for MM/PBSA calculations."   
   echo " --MD_prog          <str>        (default="pmemd.cuda") Program used to run MD."
 }
 
@@ -53,6 +55,7 @@ RUN_EQUI=1
 RUN_PROD=1
 START_REPLICA=1
 ENSEMBLE="npt"
+MMPBSA=0
 MD_PROG="pmemd.cuda"
 
 
@@ -66,6 +69,8 @@ while [[ $# -gt 0 ]]; do
   '--run_prod'               ) shift ; RUN_PROD=$1 ;;
   '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
   '--start_replica'          ) shift ; START_REPLICA=$1 ;;
+  '--mmpbsa_rescoring'       ) shift ; MMPBSA=$1 ;;
+  '--mmpbsa_crd'             ) shift ; MMPBSA_CRD=$1 ;;
   '--MD_prog'                ) shift ; MD_PROG=$1 ;;
   '--help' | '-h'            ) Help ; exit 0 ;;
   *                          ) echo "Unrecognized command line option: $1" >> /dev/stderr ; exit 1 ;;
@@ -78,6 +83,16 @@ function CheckProgram() {
   for COMMAND in "$@"; do
     if ! command -v ${1} >/dev/null 2>&1; then
       echo "Error: ${1} program not available, exiting."
+      exit 1
+    fi
+  done
+}
+
+function CheckFiles() {
+  # Check existence of files
+  for ARG in "$@"; do
+    if [[ ! -f ${ARG} ]]; then
+      echo "Error: ${ARG} file doesn't exist."
       exit 1
     fi
   done
@@ -97,6 +112,7 @@ function ParseDirectories() {
   elif [[ "$mode" == "prot_lig" ]]; then
 
     local lig=$1
+
     if [[ -z "${lig}" ]]; then
       echo "Error: ligand name is required for prot_lig mode"
       exit 1
@@ -105,6 +121,12 @@ function ParseDirectories() {
     TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_solv_com
     EQUI_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/equi/${ENSEMBLE}
     PROD_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/prod/${ENSEMBLE}
+
+    # For mmpbsa_rescoring
+    MMPBSA_rescore_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/mmpbsa/
+    VAC_COMPLEX_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_com
+    VAC_REC_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_rec
+    VAC_LIG_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_lig
   fi
 
 }
@@ -119,13 +141,14 @@ function RunMD() {
   # TOPO and CRD variable comes from ParseDirectories
   # Check if already run, or if finished incorrectly
   # -ref flag is ignored when ntr is 0
+  
   if [[ -f "${INPUT_FILE}.nc" && ! -f "${INPUT_FILE}_successful.tmp" ]]; then
     echo "${INPUT_FILE} output exists but didn't finished correctly".
     echo "Please check ${INPUT_FILE}.out"
     echo "Exiting."
     exit 1
 
-  elif [[ -f "${INPUT_FILE}_successful.tmp" ]]; then
+  if [[ -f "${INPUT_FILE}_successful.tmp" ]]; then
     echo "${INPUT_FILE} already executed succesfully."
     echo "Skipping."
   
@@ -134,9 +157,9 @@ function RunMD() {
 
     ${MD_PROG} -O -i ${INPUT_FILE}.in -o ${INPUT_FILE}.out -p ${TOPO}.parm7 -x ${INPUT_FILE}.nc \
               -r ${INPUT_FILE}.rst7 -c ${RESTART_FILE}.rst7 -ref ${CRD}.rst7 -inf ${INPUT_FILE}.info \
+              && touch "${INPUT_FILE}_successful.tmp" \
               || { echo "Error: ${MD_PROG} failed during ${INPUT_FILE}"; exit 1; }
 
-    touch "${INPUT_FILE}_successful.tmp"
     echo "Done ${INPUT_FILE}."
   fi
 }
@@ -146,9 +169,12 @@ function RunProtocol() {
   # DIRs comes from ParseDirectorioes
   # RunMD is the function that perform MD
 
-  if [[ ${RUN_EQUI} -eq 1 ]]; then
+  local mode=$1
+  local dir=$2
 
-    cd ${EQUI_DIR}
+  if [[ ${mode} -eq "equi" ]]; then
+
+    cd ${dir}
 
     # Can adjust this to your needs, ensure to match the protocol used in setupMD.sh.
     RunMD min1 "${CRD}" 
@@ -167,9 +193,9 @@ function RunProtocol() {
 
   fi
 
-  if [[ ${RUN_PROD} -eq 1 ]]; then
+  if [[ ${mode} -eq "prod" ]]; then
     # Can adjust this to your needs
-    cd ${PROD_DIR}
+    cd ${dir}
 
     RunMD md_prod ${EQUI_DIR}/npt_equil_6
     
@@ -177,6 +203,69 @@ function RunProtocol() {
   fi
 }
 
+
+function MMPBSA() {
+  local input_file=$1
+  local input_crd=$2
+  local complex_topo=$3
+  local receptor_topo=$4
+  local ligand_topo=$5
+
+  CheckProgram "MMPBSA.py"
+
+  echo -e "Running MMPBSA rescoring.\n"
+  MMPBSA.py -i ${input_file} \
+            -y ${input_crd} \
+            -cp ${complex_topo} \
+            -rp ${receptor_topo} \
+            -lp ${ligand_topo} || \
+            { echo "Error running MMPBSA rescoring. Exiting."; exit 1; }
+
+}
+
+function ProcessMMPBSACoord () {
+  local crd=$1
+  local topo=$2
+
+  local crd_name=$(basename ${crd} .rst7)
+  
+  cat > remove_solvent.in <<EOF
+parm ${topo}
+trajin ${crd}
+strip :WAT,Na+,Cl-
+trajout ${crd}_noWAT.rst7
+EOF
+  cpptraj -i remove_solvent.in
+
+}
+
+function RunMMPBSArescoreProtocol() {
+
+  local mmpbsa_dir=$1
+  local input_crd=$2
+
+
+  # Two-step minimization
+  RunMD min1 "${CRD}" 
+  RunMD min2 min1
+
+  # Remove solvent and ions
+  ProcessMMPBSACoord ${input_crd} ${TOPO}
+
+  cd ${MMPBSA_rescore_DIR}/mmpbsa
+
+  local input_file="mm_pbsa.in"
+  local complex_topo=${VAC_COMPLEX_TOPO}
+  local receptor_topo=${VAC_REC_TOPO}
+  local ligand_topo=${VAC_LIG_TOPO}
+
+  MMPBSA ${input_file} \
+         ${input_crd} \
+         ${complex_topo} \
+         ${receptor_topo} \
+         ${ligand_topo}
+
+}
 ############################################################
 # Main
 ############################################################
@@ -189,7 +278,15 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
     ParseDirectories "prot_only"
-    RunProtocol
+
+    if [[ ${RUN_EQUI} -eq 1 ]]; then
+      RunProtocol "equi" ${EQUI_DIR}
+    fi
+
+    if [[ ${RUN_PROD} -eq 1 ]]; then
+      RunProtocol "prod" ${PROD_DIR}
+    fi
+
   fi
 
   if [[ ${PROT_LIG_MD} -eq 1 ]]; then
@@ -202,9 +299,26 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     fi
 
     for LIG_NAME in ${LIGANDS_PATH[@]}; do
+
+      # Required for both MD and MMPBSA
       LIG_NAME=$(basename ${LIG_NAME} .mol2)
+      echo "Doing ligand: ${LIG_NAME}"
+
       ParseDirectories "prot_lig" ${LIG_NAME}
-      RunProtocol
+      
+      # MD
+
+      if [[ ${RUN_EQUI} -eq 1 ]]; then
+        RunProtocol "equi" ${EQUI_DIR}
+      fi
+
+      if [[ ${RUN_PROD} -eq 1 ]]; then
+        RunProtocol "prod" ${PROD_DIR}
+      fi
+
+      if [[ ${MMPBSA} -eq 1 ]]; then
+        RunMMPBSArescoreProtocol ${MMPBSA_rescore_DIR} "min2_noWAT.rst7"
+      fi
     done
 
   else
