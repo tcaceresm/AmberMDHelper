@@ -141,13 +141,14 @@ function RunMD() {
   # TOPO and CRD variable comes from ParseDirectories
   # Check if already run, or if finished incorrectly
   # -ref flag is ignored when ntr is 0
+  
   if [[ -f "${INPUT_FILE}.nc" && ! -f "${INPUT_FILE}_successful.tmp" ]]; then
     echo "${INPUT_FILE} output exists but didn't finished correctly".
     echo "Please check ${INPUT_FILE}.out"
     echo "Exiting."
     exit 1
 
-  elif [[ -f "${INPUT_FILE}_successful.tmp" ]]; then
+  if [[ -f "${INPUT_FILE}_successful.tmp" ]]; then
     echo "${INPUT_FILE} already executed succesfully."
     echo "Skipping."
   
@@ -156,9 +157,9 @@ function RunMD() {
 
     ${MD_PROG} -O -i ${INPUT_FILE}.in -o ${INPUT_FILE}.out -p ${TOPO}.parm7 -x ${INPUT_FILE}.nc \
               -r ${INPUT_FILE}.rst7 -c ${RESTART_FILE}.rst7 -ref ${CRD}.rst7 -inf ${INPUT_FILE}.info \
+              && touch "${INPUT_FILE}_successful.tmp" \
               || { echo "Error: ${MD_PROG} failed during ${INPUT_FILE}"; exit 1; }
 
-    touch "${INPUT_FILE}_successful.tmp"
     echo "Done ${INPUT_FILE}."
   fi
 }
@@ -218,7 +219,7 @@ function MMPBSA() {
             -cp ${complex_topo} \
             -rp ${receptor_topo} \
             -lp ${ligand_topo} || \
-            {echo "Error running MMPBSA rescoring. Exiting."; exit 1; }
+            { echo "Error running MMPBSA rescoring. Exiting."; exit 1; }
 
 }
 
@@ -301,6 +302,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
       # Required for both MD and MMPBSA
       LIG_NAME=$(basename ${LIG_NAME} .mol2)
+      echo "Doing ligand: ${LIG_NAME}"
 
       ParseDirectories "prot_lig" ${LIG_NAME}
       
