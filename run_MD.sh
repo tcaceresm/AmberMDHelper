@@ -147,6 +147,7 @@ function RunMD() {
     echo "Please check ${INPUT_FILE}.out"
     echo "Exiting."
     exit 1
+  fi
 
   if [[ -f "${INPUT_FILE}_successful.tmp" ]]; then
     echo "${INPUT_FILE} already executed succesfully."
