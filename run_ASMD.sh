@@ -219,7 +219,7 @@ function CreatePMF() {
 
   done
 
-  rm -f /tmp/last_work.txt
+  rm -f /tmp/last_jar_work.txt
 }
 
 function ParseWorkData() {
