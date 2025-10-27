@@ -263,7 +263,7 @@ function ConcatenateJarTrajectories() {
 
   CheckProgram cpptraj
 
-  cpptraj > ${JAR_DIR}/concatenate.in <<EOF
+  cat > ${JAR_DIR}/concatenate.in <<EOF
   parm ${TOPO}
   $(for traj in $(ls -v ${JAR_DIR}/*SMD_stage_*.nc); do
       echo "trajin ${traj}"
