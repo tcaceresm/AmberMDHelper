@@ -173,7 +173,7 @@ function RunProtocol() {
   local mode=$1
   local dir=$2
 
-  if [[ ${mode} -eq "equi" ]]; then
+  if [[ ${mode} == "equi" ]]; then
 
     cd ${dir}
 
@@ -194,7 +194,7 @@ function RunProtocol() {
 
   fi
 
-  if [[ ${mode} -eq "prod" ]]; then
+  if [[ ${mode} == "prod" ]]; then
     # Can adjust this to your needs
     cd ${dir}
 
