@@ -63,8 +63,14 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# NR total record number, FNR current file record number
+# So when NR==FNR, we are in the first file.
+
+# %s -> cadena tal cual
+# %8s -> cadena ancho minimo 8, alineada a la derecha
+
 awk '
-NR==FNR && /^(ATOM|HETATM)/ {
+NR==FNR && /^(ATOM|HETATM)/ { 
     # Save coords (columnas 31-54)
     x[FNR] = substr($0,31,8)
     y[FNR] = substr($0,39,8)
