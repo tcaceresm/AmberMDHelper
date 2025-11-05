@@ -798,42 +798,6 @@ function ProtocolMD() {
 
 }
 
-function PrepareMMPBSA() {
-  # Protocol for MM/PBSA rescoring
-  # set two step minimization
-  # As it does not require MD, I use a different folder than MD
-
-  local mmpbsa_dir=$1
-  local totalres=$2
-  local startframe=$3
-  local endframe=$4
-  local interval=$5
-
-  mkdir -p ${mmpbsa_dir}
-  
-  cd ${mmpbsa_dir}
-
-  # Minimization
-
-  CreateMinInput min1 restraintmask ":1-${totalres}&!@H=" restraint_wt 25.0
-  CreateMinInput min2 restraintmask ":1-${totalres}&!@H=" restraint_wt 5.0
-  
-  # MMPBSA input file
-
-  cat > ${mmpbsa_dir}/mm_pbsa.in <<EOF
-Input file for PB calculation
-&general
-startframe=${startframe}, endframe=${endframe}, interval=${interval},
-verbose=2, keep_files=0, netcdf=1,
-/
-&pb
-istrng=0.15, fillratio=4.0,
-/
-EOF
-
-  cd ${WDPATH}
-
-}
 
 ############################################################
 # Main script
@@ -970,13 +934,6 @@ if [[ ${PROT_LIG_MD} -eq 1 ]]; then
         ProtocolMD ${EQUI_DIR} ${PROD_DIR} ${TOTALRES} ${NSTLIM_EQUI} ${NSTLIM_PROD}
         echo -e "\nDone creating MD files for prot-lig."
       fi
-
-      if [[ ${MMPBSA} == 1 && ${REP} -eq 1 ]]; then
-      # MMPBSA rescoring don't need replicas
-        PrepareMMPBSA "${MODE_DIR}/mmpbsa_rescore/" ${TOTALRES} 1 1 1
-        echo -e "\nDone creating ${LIGAND_NAME} MMPBSA files for prot-lig replica ${REP}."
-      fi
-
     done
   done
 
