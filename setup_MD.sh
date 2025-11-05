@@ -55,7 +55,6 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
   echo " --prot_ff          <string>     (default="ff19SB") Protein forcefield."
   echo " --water_model      <string>     (default="opc") Water model used in MD."
   echo " --box_size         <integer>    (default=14) Size of water box."
-  echo " --mmpbsa_rescoring <0|1>        (default=0) Prepare MM/PBSA rescoring input files. --prot_lig must be 1."
 }
 
 # Default values
@@ -97,7 +96,6 @@ while [[ $# -gt 0 ]]; do
   '--prep_MD'                ) shift ; PREP_MD=$1 ;;
   '--calc_lig_charge'        ) shift ; COMPUTE_CHARGES=$1 ;;
   '--charge_method'          ) shift ; CHARGE_METHOD=$1 ;;
-  '--mmpbsa_rescoring'       ) shift ; MMPBSA=$1 ;;
   '--threads'                ) shift ; NTHREADS=$1 ;;
   '--lig_ff'                 ) shift ; LIG_FF=$1 ;;
   '--prot_ff'                ) shift ; PROT_FF=$1 ;;
