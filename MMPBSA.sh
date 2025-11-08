@@ -197,6 +197,8 @@ function RunMMPBSA() {
   ${EXE} -O -i ${input_file} \
             -o mmpbsa_results.data \
             -eo per_frame_mmpbsa_results.data \
+            -do decomp_mmpbsa_results.data \
+            -deo per_frame_decomp_mmpbsa_results.data \
             -cp ${com_topo} \
             -rp ${rec_topo} \
             -lp ${lig_topo} \
