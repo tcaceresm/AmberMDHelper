@@ -1,0 +1,231 @@
+#! /usr/bin/bash
+
+# Script to parse MM/PBSA calculations
+# Specifically, process per frame results.
+# (idecomp=1 in MMPBSA input file)"
+# Also works for decomposition results.
+
+
+WDPATH=$(realpath .)
+
+for ligand in ligands/*.mol2; do
+  ligand=$(basename ${ligand} .mol2)
+
+  md_path="./setupMD/hCOX-2/proteinLigandMD/${ligand}/MD/rep1/equi/npt/"
+  mmpbsa_path="${md_path}/mmpbsa"
+
+  cd ${mmpbsa_path}
+  awk -v flag=0 '/^DELTA/ {flag=1; next} flag' per_frame_mmpbsa_results.data > per_frame_mmpbsa_results_parsed.data
+
+  cd ${WDPATH}
+
+done
+
+#!/usr/bin/bash
+
+# Global variables are always UPPERCASE.
+# Local are used with local keyword and lowercase.
+# If some function requires too much arguments,
+# try using global variables directly, however, this is harder to
+# read and debug.
+
+#set -x
+
+# To do: add options for mmpbsa input file (mmpbsa.py)
+
+function ScriptInfo() {
+  DATE="2025"
+  VERSION="0.0.1"
+  GH_URL="https://github.com/tcaceresm/AmberMDHelper"
+  LAB="http://schuellerlab.org/"
+
+  cat <<EOF
+###################################################
+ Welcome to parse MMPBSA version ${VERSION} ${DATE}   
+  Author: Tomás Cáceres <caceres.tomas@uc.cl>    
+  Laboratory of Molecular Design <${LAB}>
+  Laboratory of Computational simulation & drug design        
+  GitHub <${GH_URL}>                             
+  Powered by high fat food and procrastination   
+###################################################
+EOF
+}
+
+Help() {
+  ScriptInfo
+  echo -e "\nUsage: bash parse_MMPBSA.sh OPTIONS\n"
+  echo -e "This script parse results from MM/PB(G)SA calculations obtained with MMPBSA.py script."
+  echo -e "It requires a per frame MMPBSA output file, both "normal" and/or file with decomposition data.\n"
+  echo "Also, requires a folder structure obtained with setup_MD.sh."
+  echo
+  echo "Required options:"
+  echo " -d, --work_dir           <DIR>        Working directory. Inside this directory, a folder named setupMD must exist with all required files."
+  echo "                                     Also, a ligands and receptor folders are required to parse directories."
+  echo " --parse_results          <0|1>        (default=1) parse per-frame MMPBSA results."
+  echo " --parse_decomp_results   <0|1>        (default=1) parse per-frame MMPBSA decomposition results."
+  echo "Optional:"
+  echo " -h,  --help                         Show this help."
+  # echo " -o,  --output          <file>       Parsed per-frame MMPBSA results. Default is <--results file> appended with <parsed>."
+  # echo " -do, --decomp_output   <file>       Parsed per-frame decomposition MMPBSA results. Default is <--decomp_results file> appended with <parsed>."
+  echo " --equi                   <0|1>        (default=1) Parse MMPBSA results from equi stage."
+  echo " --prod                   <0|1>        (default=1) Parse MMPBSA results from prod stage."
+  echo " -n,  --replicas          <integer>    (default=3) Number of replicas or repetitions."
+  echo " --start_replica          <integer>    (default=1) Run from --start_replica to --replicas."
+}
+
+# Check arguments
+if [[ "$#" == 0 ]]; then
+  echo "No options provided."
+  echo "Use --help option to check available options."
+  exit 1
+fi
+
+# Default values
+
+START_REPLICA=1
+REPLICAS=3
+PARSE_RESULTS_FILE=1
+PARSE_DECOMP_RESULTS_FILE=1
+PARSE_EQUI=1
+PARSE_PROD=1
+
+# CLI option parser
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  '-d' | '--work_dir'              ) shift ; WDDIR=$1 ;;
+  '--parse_results'                ) shift ; PARSE_RESULTS_FILE=$1 ;;
+  '--parse_decomp_results'         ) shift ; PARSE_DECOMP_RESULTS_FILE=$1 ;;
+  '--equi'                         ) shift ; PARSE_EQUI=$1 ;;
+  '--prod'                         ) shift ; PARSE_PROD=$1 ;;
+  # '-o' | '--output'                ) shift ; PARSED_OUTPUT=$1 ;;
+  # '-do' | '--decomp_ouput'         ) shift ; PARSED_DECOMP_OUTPUT=$1 ;;
+  '-n' | '--replicas'              ) shift ; REPLICAS=$1 ;;
+  '--start_replica'                ) shift ; START_REPLICA=$1 ;;
+  '--help' | '-h'                  ) Help ; exit 0 ;;
+  *                                ) echo "Unrecognized command line option: $1" >> /dev/stderr ; exit 1 ;;
+  esac
+  shift
+done
+
+
+function CheckFiles() {
+  # Check existence of files
+  for ARG in "$@"; do
+    if [[ ! -f ${ARG} ]]; then
+      echo "Error: ${ARG} file doesn't exist."
+      exit 1
+    fi
+  done
+}
+
+function ParseDirectory() {
+  local mode=$1
+  local lig=$2
+  local rep=$3
+
+  MMPBSA_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/${mode}/npt/mmpbsa
+  mkdir -p ${MMPBSA_DIR}
+
+}
+
+function ParseOutput() {
+  
+  if [[ ${PARSE_RESULTS_FILE} -eq 1 ]]; then
+    CheckFiles "per_frame_mmpbsa_results.data"
+    awk -v flag=0 '/^DELTA/ {
+    flag=1; next
+    } flag' per_frame_mmpbsa_results.data > per_frame_mmpbsa_results_parsed.data
+  fi
+
+  if [[ ${PARSE_DECOMP_RESULTS_FILE} -eq 1 ]]; then
+    CheckFiles "per_frame_decomp_mmpbsa_results.data"
+    # Total decomposition data
+    awk -F',' -v flag=0 '
+    /^DELTA/ && $2 ~ /Total/ {
+      flag=1; next
+    } 
+    /^DELTA/ {
+      flag=0
+    }
+      flag {
+      print $0
+    }
+    ' per_frame_decomp_mmpbsa_results.data > per_frame_total_decomp_mmpbsa_results.data
+  
+    # Side chain decomposition data
+    awk -F',' -v flag=0 '
+    /^DELTA/ && $2 ~ /Sidechain/ {
+      flag=1; next
+    } 
+    /^DELTA/ {
+      flag=0
+    }
+      flag {
+      print $0
+    }
+    ' per_frame_decomp_mmpbsa_results.data > per_frame_sidechain_decomp_mmpbsa_results.data
+
+    # Backbone decomposition data
+    awk -F',' -v flag=0 '
+    /^DELTA/ && $2 ~ /Backbone/ {
+      flag=1; next
+    } 
+    /^DELTA/ {
+      flag=0
+    }
+      flag {
+      print $0
+    }
+    ' per_frame_decomp_mmpbsa_results.data > per_frame_backbone_decomp_mmpbsa_results.data
+  fi
+}
+
+############################################################
+# Main
+############################################################
+
+WDDIR=$(realpath "$WDDIR")
+
+RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
+
+for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
+
+  LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
+  
+  if [[ ${#LIGANDS_PATH[@]} -eq 0 ]]; then
+    echo "Error: ligands folder is empty."
+    exit 1
+  fi
+
+  for LIG_NAME in ${LIGANDS_PATH[@]}; do
+
+    # 
+    LIG_NAME=$(basename ${LIG_NAME} .mol2)
+    echo "Doing ligand: ${LIG_NAME}"
+
+    if [[ ${PARSE_EQUI} -eq 1 ]]; then
+      echo "Parsing equi per-frame MMPBSA results"
+      ParseDirectory "equi" ${LIG_NAME} ${REP}
+
+      cd ${MMPBSA_DIR}
+
+      ParseOutput 
+
+      cd ${WDDIR}
+      echo "Done"
+    fi
+
+    if [[ ${PARSE_PROD} -eq 1 ]]; then
+      echo "Parsing prod per-frame MMPBSA results"
+      ParseDirectory "prod" ${LIG_NAME} ${REP}
+
+      cd ${MMPBSA_DIR}
+
+      ParseOutput 
+   
+      cd ${WDDIR}
+      echo "Done"
+    fi
+
+  done
+done
