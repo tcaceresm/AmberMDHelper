@@ -51,6 +51,13 @@ Help() {
   echo " --cores            <integer>    (default=4) Number of cores to parallelize, if --parallel is set to 1."
 }
 
+# Check arguments
+if [[ "$#" == 0 ]]; then
+  echo "No options provided."
+  echo "Use --help option to check available options."
+  exit 1
+fi
+
 # Default values
 
 RUN_EQUI=1
@@ -161,7 +168,9 @@ verbose=2, keep_files=0, netcdf=1,
 &pb
 istrng=0.15, fillratio=4.0,
 /
-
+&decomp
+dec_verbose=1, idecomp=1,
+/
 EOF
 }
 
