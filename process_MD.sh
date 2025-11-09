@@ -157,7 +157,9 @@ function TotalResWrapper() {
 function RemoveWat() {
   local dir=$1
   shift
-  local traj=($@)
+  local traj=($(echo "$@" | tr ' ' '\n' | sort -V))
+  traj=(${traj[@]##*/})
+
   cat > ${dir}/remove_hoh.in <<EOF
 parm ${TOPO}
 EOF
@@ -255,7 +257,7 @@ function Process() {
   if [[ ${PROCESS_EQUI} -eq 1 ]]; then
 
     if [[ ${PROCESS_WAT} -eq 1 ]]; then
-      RemoveWat ${EQUI_DIR} md_nvt_ntr.nc *npt_equil*.nc
+      RemoveWat ${EQUI_DIR} ${EQUI_DIR}/md_nvt_ntr.nc ${EQUI_DIR}/*npt_equil*.nc
     fi
 
     if [[ ${PROCESS_RMSD} -eq 1 ]]; then
@@ -270,7 +272,7 @@ function Process() {
   if [[ ${PROCESS_PROD} -eq 1 ]]; then
 
     if [[ ${PROCESS_WAT} -eq 1 ]]; then
-      RemoveWat ${PROD_DIR} *md_prod*.nc
+      RemoveWat ${PROD_DIR} ${PROD_DIR}/*md_prod*.nc
     fi
 
     if [[ ${PROCESS_RMSD} -eq 1 ]]; then
