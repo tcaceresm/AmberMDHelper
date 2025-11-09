@@ -170,10 +170,18 @@ function ClosestWorkToJar() {
   CheckFiles ${SCRIPT_PATH}/ASMD.py
   CheckProgram python3
 
-  python3 ${SCRIPT_PATH}/ASMD.py -i ${STAGE_PATH}/SMD_work_stage_${STAGE}_traj_*.data -o JAR_stage_${STAGE}.dat --temp ${TEMPERATURE} | tee "${STAGE_PATH}/JAR_stage_${STAGE}.log" > /dev/null
+  if [[ ! -z ${DRY_RUN} ]]; then
+    echo "${SCRIPT_PATH}/ASMD.py -i ${STAGE_PATH}/SMD_work_stage_${STAGE}_traj_*.data -o JAR_stage_${STAGE}.dat --temp ${TEMPERATURE}" 
+  else
+    python3 ${SCRIPT_PATH}/ASMD.py -i ${STAGE_PATH}/SMD_work_stage_${STAGE}_traj_*.data \
+                                   -o JAR_stage_${STAGE}.dat \
+                                   --temp ${TEMPERATURE} \
+                                   | tee "${STAGE_PATH}/JAR_stage_${STAGE}.log" > /dev/null
+  fi
 }
 
 function ClosestTrajToJar() {
+  # This only setup variables.
   # Set restart file (.rst7) for next smd stage
   # Set trajectory file for visualization
   STAGE=$1
