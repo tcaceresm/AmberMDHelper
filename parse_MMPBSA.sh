@@ -124,6 +124,7 @@ function ParseDirectory() {
   local rep=$3
 
   MMPBSA_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/${mode}/npt/mmpbsa
+  TOPO_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/
   mkdir -p ${MMPBSA_DIR}
 
 }
@@ -138,6 +139,50 @@ function ParseOutput() {
   fi
 
   if [[ ${PARSE_DECOMP_RESULTS_FILE} -eq 1 ]]; then
+
+    CheckFiles "decomp_mmpbsa_results.data"
+
+    # Step 1: get a file just with residue number and energy: res energy
+    awk -v flag=0 '
+    NR == 8 { # skip first 7 lines
+      flag=1
+    }
+    /Sidechain/ {
+      flag=0
+    } flag
+    ' decomp_mmpbsa_results.data > residue_energy_map.tmp
+
+    # Step 2: Parse resnumber and energy column.
+    awk -F',' ' 
+    { 
+      split($1,array," "); resnum=array[2]; print resnum, $18
+    }
+    ' residue_energy_map.tmp > residue_energy_map.data
+    rm residue_energy_map.tmp
+
+    # Step 3: put energy values in b-factor column
+    cp ${TOPO_DIR}/${LIG_NAME}_com.pdb .
+
+    awk '
+      NR==FNR { # estamos en el priemr archivo que es un map residuo -> energia
+        # Guardamos energía por número de residuo
+        energy[$1] = $2
+        next
+      }
+
+      # Segundo archivo
+      /^(ATOM|HETATM)/ {
+        resnum = $5
+        new_b_factor = energy[resnum]
+
+        # reemplazar columna del B-factor (col 61–66)
+        printf "%s%6.3f%s\n", substr($0,1,60), new_b_factor, substr($0,67)
+        next
+      }
+      # otras líneas se imprimen igual
+      { print }
+    ' residue_energy_map.data ${LIG_NAME}_com.pdb > MMPBSA.pdb
+
     CheckFiles "per_frame_decomp_mmpbsa_results.data"
     # Total decomposition data
     awk -F',' -v flag=0 '
