@@ -148,10 +148,8 @@ function ParseDirectories() {
 
 function TotalResWrapper() {
   # Obtain total residue of solute, using dry topology.
-  DRY_TOPO=$1
-  cd ${EQUI_DIR}
-  TOTALRES=$(cpptraj -p ${DRY_TOPO} --resmask \* | tail -n 1 | awk '{print $1}')
-  cd ${WDDIR}
+  local dry_topo=$1
+  TOTALRES=$(cpptraj -p ${dry_topo} --resmask \* | tail -n 1 | awk '{print $1}')
 }
 
 function RemoveWat() {
