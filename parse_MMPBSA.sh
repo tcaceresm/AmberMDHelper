@@ -1,26 +1,3 @@
-#! /usr/bin/bash
-
-# Script to parse MM/PBSA calculations
-# Specifically, process per frame results.
-# (idecomp=1 in MMPBSA input file)"
-# Also works for decomposition results.
-
-
-WDPATH=$(realpath .)
-
-for ligand in ligands/*.mol2; do
-  ligand=$(basename ${ligand} .mol2)
-
-  md_path="./setupMD/hCOX-2/proteinLigandMD/${ligand}/MD/rep1/equi/npt/"
-  mmpbsa_path="${md_path}/mmpbsa"
-
-  cd ${mmpbsa_path}
-  awk -v flag=0 '/^DELTA/ {flag=1; next} flag' per_frame_mmpbsa_results.data > per_frame_mmpbsa_results_parsed.data
-
-  cd ${WDPATH}
-
-done
-
 #!/usr/bin/bash
 
 # Global variables are always UPPERCASE.
