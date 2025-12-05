@@ -10,7 +10,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="1.0.2"
+  VERSION="1.0.3"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
@@ -31,9 +31,10 @@ function Help() {
   echo -e "\nUsage: bash process_MD.sh OPTIONS\n"
   echo "This script process molecular dynamics simulations in the specified directory previously configured with setup_MD.sh."
   echo "This include:"
-  echo " - remove solvent"
-  echo " - RMSD and RMSF data generation"
-  echo " - Temperature, Density and Total energy data generation"
+  echo " - Remove solvent from trajectories."
+  echo " - RMSD and RMSF data generation."
+  echo " - Temperature, Density and Total energy data generation."
+  echo " - Intermolecular H-bond."
   echo -e "\nThe specified directory must always have a folder named  \"receptor\" containing the receptor PDB 
 and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of ligands and cofactor, respectively.\n"
 
@@ -50,6 +51,7 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
                                    it's automatically determined)."
   echo " --dry              <0|1>          (default=1) Remove water and ions from trajectories."
   echo " --thermo           <0|1>          (default=1) Generate Temperature, Density and Total Energy data from trajectories. These are obtained from .out files."
+  echo " --hbond            <0|1>          (default=0) Compute intermolecular h-bonds (protein-ligand mode only)."
   echo " -n, --replicas     <integer>      (default=3) Number of replicas or repetitions to process."
   echo " --start_replica    <integer>      (default=1) Process from --start_replica to --replicas."
 }
@@ -69,6 +71,7 @@ PROCESS_PROD=1
 PROCESS_RMSD=1
 PROCESS_WAT=1
 PROCESS_THERMO=1
+PROCESS_IHBOND=0
 REPLICAS=3
 START_REPLICA=1
 ENSEMBLE="npt"
@@ -88,6 +91,7 @@ while [[ $# -gt 0 ]]; do
     '--rmsd_mask'              ) shift ; MASK=$1 ;;
     '--dry'                    ) shift ; PROCESS_WAT=$1 ;;
     '--thermo'                 ) shift ; PROCESS_THERMO=$1 ;;
+    '--hbond'                  ) shift ; PROCESS_IHBOND=$1 ;;
     '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
     '--start_replica'          ) shift ; START_REPLICA=$1 ;;
     *                          ) echo "Unrecognized command line option: $1" >> /dev/stderr ; exit 1 ;;
@@ -250,6 +254,33 @@ EOF
   cd ${WDDIR}
 }
   
+
+function IntermolecularHBond() {
+  # Compute Hbond between ligand and protein.
+  # only for prot lig mode.
+  local dir=$1
+  local target=$2
+  local mode=$3
+
+  if [[ ${mode} == "prot_lig" ]]; then
+    cat > ${dir}/hbond.in <<EOF
+parm ${DRY_TOPO}
+trajin ./noWAT_traj.nc
+hbond hbonds :1-${TOTALRES} avgout hbond_avg.data series uuseries hbond_series.data nointramol
+go
+lifetime hbonds[solutehb] out hbond_lifetime.data
+go
+EOF
+    cd ${dir}
+    cpptraj -i "${dir}/hbond.in" || { echo "Error with IntermolecularHBond(). Exiting."; exit 1; }
+    cd ${WDDIR}
+
+  else
+    echo "Warning in IntermolecularHBond: Trying to compute protein-ligand h-bonds in only_protein mode."
+    echo "Skipping."
+  fi
+}
+
 function Process() {
   mode=$1
   target=$2
@@ -267,6 +298,10 @@ function Process() {
     if [[ ${PROCESS_THERMO} -eq 1 ]]; then
       ThermodynamicsData ${EQUI_DIR} "equi"
     fi
+
+    if [[ ${PROCESS_IHBOND} -eq 1 ]]; then
+      IntermolecularHBond ${EQUI_DIR} ${target} ${mode}
+    fi
   fi
 
   if [[ ${PROCESS_PROD} -eq 1 ]]; then
@@ -281,6 +316,10 @@ function Process() {
 
     if [[ ${PROCESS_THERMO} -eq 1 ]]; then
       ThermodynamicsData ${PROD_DIR} "prod"
+    fi
+
+    if [[ ${PROCESS_IHBOND} -eq 1 ]]; then
+      IntermolecularHBond ${PROD_DIR} ${target} ${mode}
     fi
 
   fi
