@@ -10,7 +10,7 @@
 
 function ScriptInfo() {
   DATE="2025"
-  VERSION="1.0.3"
+  VERSION="1.0.4"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
   LAB="http://schuellerlab.org/"
 
@@ -132,7 +132,7 @@ function ParseDirectories() {
     TOPO_DIR=../../../../topo
     TOPO=$(echo ${TOPO_DIR}/*${RECEPTOR_NAME}_solv*.parm7)
     DRY_TOPO=$(echo ${TOPO_DIR}/*${RECEPTOR_NAME}_vac*.parm7)
-    cd ${WDDIR}
+    #cd ${WDDIR}
   elif [[ "$mode" == "prot_lig" ]]; then
     local lig=$1
     if [[ -z "${lig}" ]]; then
@@ -145,7 +145,7 @@ function ParseDirectories() {
     TOPO_DIR=../../../../topo
     TOPO=$(echo ${TOPO_DIR}/${lig}_solv_com.parm7)
     DRY_TOPO=$(echo ${TOPO_DIR}/${lig}_vac_com.parm7)
-    cd ${WDDIR}
+    #cd ${WDDIR}
   fi
 
 }
@@ -270,7 +270,7 @@ lifetime hbonds[solutehb] out hbond_lifetime.data
 go
 EOF
     cd ${dir}
-    cpptraj -i "${dir}/hbond.in" || { echo "Error with IntermolecularHBond(). Exiting."; exit 1; }
+    cpptraj -i "${dir}/hbond.in" # || { echo "Error with IntermolecularHBond(). Exiting."; exit 1; }
     cd ${WDDIR}
 
   else
@@ -330,6 +330,10 @@ function CheckUniqueFile() {
 
   if [[ ${count} -gt 1 ]]; then
     echo "$(basename ${folder}) folder contain more than one PDB or mol2 file."
+    echo "Exiting."
+    exit 1
+  elif [[ ${count} -eq 0 ]]; then
+    echo "$(basename ${folder}) folder is empty."
     echo "Exiting."
     exit 1
   fi
