@@ -89,10 +89,11 @@ function CheckFiles() {
   # Check existence of files
   for ARG in "$@"; do
     if [[ ! -f ${ARG} ]]; then
-      echo "Error: ${ARG} file doesn't exist."
-      exit 1
+      echo "Warning: ${ARG} file doesn't exist."
+      return 1
     fi
   done
+  return 0
 }
 
 function ParseDirectory() {
@@ -109,96 +110,99 @@ function ParseDirectory() {
 function ParseOutput() {
   
   if [[ ${PARSE_RESULTS_FILE} -eq 1 ]]; then
-    CheckFiles "per_frame_mmpbsa_results.data"
-    awk -v flag=0 '/^DELTA/ {
-    flag=1; next
-    } flag' per_frame_mmpbsa_results.data > per_frame_mmpbsa_results_parsed.data
+    if CheckFiles "per_frame_mmpbsa_results.data"; then
+      awk -v flag=0 '/^DELTA/ {
+      flag=1; next
+      } flag' per_frame_mmpbsa_results.data > per_frame_mmpbsa_results_parsed.data
+    fi
   fi
 
   if [[ ${PARSE_DECOMP_RESULTS_FILE} -eq 1 ]]; then
 
-    CheckFiles "decomp_mmpbsa_results.data"
+    if CheckFiles "decomp_mmpbsa_results.data"; then
 
-    # Step 1: get a file just with residue number and energy: res energy
-    awk -v flag=0 '
-    NR == 8 { # skip first 7 lines
-      flag=1
-    }
-    /Sidechain/ {
-      flag=0
-    } flag
-    ' decomp_mmpbsa_results.data > residue_energy_map.tmp
-
-    # Step 2: Parse resnumber and energy column.
-    awk -F',' ' 
-    { 
-      split($1,array," "); resnum=array[2]; print resnum, $18
-    }
-    ' residue_energy_map.tmp > residue_energy_map.data
-    rm residue_energy_map.tmp
-
-    # Step 3: put energy values in b-factor column
-    cp ${TOPO_DIR}/${LIG_NAME}_com.pdb .
-
-    awk '
-      NR==FNR { # estamos en el priemr archivo que es un map residuo -> energia
-        # Guardamos energía por número de residuo
-        energy[$1] = $2
-        next
+      # Step 1: get a file just with residue number and energy: res energy
+      awk -v flag=0 '
+      NR == 8 { # skip first 7 lines
+        flag=1
       }
+      /Sidechain/ {
+        flag=0
+      } flag
+      ' decomp_mmpbsa_results.data > residue_energy_map.tmp
 
-      # Segundo archivo
-      /^(ATOM|HETATM)/ {
-        resnum = $5
-        new_b_factor = energy[resnum]
-
-        # reemplazar columna del B-factor (col 61–66)
-        printf "%s%6.3f%s\n", substr($0,1,60), new_b_factor, substr($0,67)
-        next
+      # Step 2: Parse resnumber and energy column.
+      awk -F',' ' 
+      { 
+        split($1,array," "); resnum=array[2]; print resnum, $18
       }
-      # otras líneas se imprimen igual
-      { print }
-    ' residue_energy_map.data ${LIG_NAME}_com.pdb > MMPBSA.pdb
+      ' residue_energy_map.tmp > residue_energy_map.data
+      rm residue_energy_map.tmp
 
-    CheckFiles "per_frame_decomp_mmpbsa_results.data"
-    # Total decomposition data
-    awk -F',' -v flag=0 '
-    /^DELTA/ && $2 ~ /Total/ {
-      flag=1; next
-    } 
-    /^DELTA/ {
-      flag=0
-    }
-      flag {
-      print $0
-    }
-    ' per_frame_decomp_mmpbsa_results.data > per_frame_total_decomp_mmpbsa_results.data
-  
-    # Side chain decomposition data
-    awk -F',' -v flag=0 '
-    /^DELTA/ && $2 ~ /Sidechain/ {
-      flag=1; next
-    } 
-    /^DELTA/ {
-      flag=0
-    }
-      flag {
-      print $0
-    }
-    ' per_frame_decomp_mmpbsa_results.data > per_frame_sidechain_decomp_mmpbsa_results.data
+      # Step 3: put energy values in b-factor column
+      cp ${TOPO_DIR}/${LIG_NAME}_com.pdb .
 
-    # Backbone decomposition data
-    awk -F',' -v flag=0 '
-    /^DELTA/ && $2 ~ /Backbone/ {
-      flag=1; next
-    } 
-    /^DELTA/ {
-      flag=0
-    }
-      flag {
-      print $0
-    }
-    ' per_frame_decomp_mmpbsa_results.data > per_frame_backbone_decomp_mmpbsa_results.data
+      awk '
+        NR==FNR { # estamos en el priemr archivo que es un map residuo -> energia
+          # Guardamos energía por número de residuo
+          energy[$1] = $2
+          next
+        }
+
+        # Segundo archivo
+        /^(ATOM|HETATM)/ {
+          resnum = $5
+          new_b_factor = energy[resnum]
+
+          # reemplazar columna del B-factor (col 61–66)
+          printf "%s%6.3f%s\n", substr($0,1,60), new_b_factor, substr($0,67)
+          next
+        }
+        # otras líneas se imprimen igual
+        { print }
+      ' residue_energy_map.data ${LIG_NAME}_com.pdb > MMPBSA.pdb
+    fi
+
+    if CheckFiles "per_frame_decomp_mmpbsa_results.data"; then
+      # Total decomposition data
+      awk -F',' -v flag=0 '
+      /^DELTA/ && $2 ~ /Total/ {
+        flag=1; next
+      } 
+      /^DELTA/ {
+        flag=0
+      }
+        flag {
+        print $0
+      }
+      ' per_frame_decomp_mmpbsa_results.data > per_frame_total_decomp_mmpbsa_results.data
+    
+      # Side chain decomposition data
+      awk -F',' -v flag=0 '
+      /^DELTA/ && $2 ~ /Sidechain/ {
+        flag=1; next
+      } 
+      /^DELTA/ {
+        flag=0
+      }
+        flag {
+        print $0
+      }
+      ' per_frame_decomp_mmpbsa_results.data > per_frame_sidechain_decomp_mmpbsa_results.data
+
+      # Backbone decomposition data
+      awk -F',' -v flag=0 '
+      /^DELTA/ && $2 ~ /Backbone/ {
+        flag=1; next
+      } 
+      /^DELTA/ {
+        flag=0
+      }
+        flag {
+        print $0
+      }
+      ' per_frame_decomp_mmpbsa_results.data > per_frame_backbone_decomp_mmpbsa_results.data
+    fi
   fi
 }
 

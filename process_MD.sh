@@ -99,12 +99,23 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+function CheckFiles() {
+  # Check existence of files
+  for ARG in "$@"; do
+    if [[ ! -f ${ARG} ]]; then
+      echo "Warning: ${ARG} file doesn't exist." >&2
+      #exit 1
+      return 1
+    fi
+  done
+  return 0
+}
 
 function CheckProgram() {
   # Check if command is available
   for COMMAND in "$@"; do
-    if ! command -v ${1} >/dev/null 2>&1; then
-      echo "Error: ${1} program not available, exiting."
+    if ! command -v ${COMMAND} >/dev/null 2>&1; then
+      echo "Error: ${COMMAND} program not available, exiting."
       exit 1
     fi
   done
@@ -193,15 +204,23 @@ function RMSD() {
   cat > ${dir}/rmsd.in <<EOF
 parm ${DRY_TOPO}
 trajin ./noWAT_traj.nc
-rms first out ${target}_rmsd_noWAT.data "${MASK}" perres perresout ${target}_rmsd_perres_noWAT.data range 1-${TOTALRES} perresmask "${MASK}"
+reference ${EQUI_DIR}/noWAT_traj.nc [minimized_pose]
+rms ref [minimized_pose] out ${target}_rmsd_noWAT.data "${MASK}" perres perresout ${target}_rmsd_perres_noWAT.data range 1-${TOTALRES} perresmask "${MASK}"
 average crdset Avg
 EOF
   if [[ ${mode} == "prot_lig" ]]; then
     cat >> ${dir}/rmsd.in <<EOF
-rms first out ${LIG_NAME}_rmsd_LIG_noWAT.data :${TOTALRES}&!@H= nofit
+rms ref [minimized_pose] out ${LIG_NAME}_rmsd_LIG_noWAT.data :${TOTALRES}&!@H= nofit
+EOF
+    if [[ ${PROCESS_PROD} -eq 1 ]]; then
+      cat >> ${dir}/rmsd.in <<EOF
+rms ref [minimized_pose] out ${LIG_NAME}_rmsd_LIG_noWAT_test.data :${TOTALRES}&!@H= nofit
 EOF
   fi
+
+  fi
   cat >> ${dir}/rmsd.in <<EOF
+run
 rms ref Avg
   
 atomicfluct out ${target}_rmsf_noWAT.data "${MASK}" byres
@@ -212,7 +231,9 @@ atomicfluct out ${LIG_NAME}_rmsf_LIG_noWAT.data :${TOTALRES}&!@H= byres
 EOF
   fi
   cd ${dir}
-  cpptraj -i ./rmsd.in || { echo "Error: cpptraj failed during RMSD"; exit 1; }
+  if CheckFiles noWAT_traj.nc; then
+    cpptraj -i ./rmsd.in || { echo "Error: cpptraj failed during RMSD"; exit 1; }
+  fi
   cd ${WDDIR}
 
 }
@@ -383,7 +404,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       echo "Doing ligand: ${LIG_NAME}"
       ParseDirectories "prot_lig" ${LIG_NAME}
       TotalResWrapper ${DRY_TOPO}
-      Process "prot_lig" ${LIG_NAME}
+      Process "prot_lig" "${LIG_NAME}"
     done
 
   fi
