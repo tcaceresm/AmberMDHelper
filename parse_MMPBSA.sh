@@ -140,7 +140,7 @@ function ParseOutput() {
       rm residue_energy_map.tmp
 
       # Step 3: put energy values in b-factor column
-      cp ${TOPO_DIR}/${LIG_NAME}_com.pdb .
+      cp ${TOPO_DIR}/${LIG_NAME}_vac_com.pdb .
 
       awk '
         NR==FNR { # estamos en el priemr archivo que es un map residuo -> energia
@@ -160,7 +160,7 @@ function ParseOutput() {
         }
         # otras líneas se imprimen igual
         { print }
-      ' residue_energy_map.data ${LIG_NAME}_com.pdb > MMPBSA.pdb
+      ' residue_energy_map.data ${LIG_NAME}_vac_com.pdb > MMPBSA.pdb
     fi
 
     if CheckFiles "per_frame_decomp_mmpbsa_results.data"; then
