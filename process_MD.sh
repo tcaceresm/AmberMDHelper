@@ -51,6 +51,8 @@ and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of liga
                                    it's automatically determined)."
   echo " --dry              <0|1>          (default=1) Remove water and ions from trajectories."
   echo " --thermo           <0|1>          (default=1) Generate Temperature, Density and Total Energy data from trajectories. These are obtained from .out files."
+  echo " --mmpbsa_rescore   <0|1>          (default=0) Obtain unsolvated minimized structure (from min2.rst7 file of equilibration phase). Must run this option if you want to
+                                   perform MM/PBSA rescoring using MMPBSA.sh script."
   echo " --hbond            <0|1>          (default=0) Compute intermolecular h-bonds (protein-ligand mode only)."
   echo " -n, --replicas     <integer>      (default=3) Number of replicas or repetitions to process."
   echo " --start_replica    <integer>      (default=1) Process from --start_replica to --replicas."
@@ -91,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     '--rmsd_mask'              ) shift ; MASK=$1 ;;
     '--dry'                    ) shift ; PROCESS_WAT=$1 ;;
     '--thermo'                 ) shift ; PROCESS_THERMO=$1 ;;
+    '--mmpbsa_rescore'         ) shift ; MMPBSA_RESCORE=$1 ;;
     '--hbond'                  ) shift ; PROCESS_IHBOND=$1 ;;
     '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
     '--start_replica'          ) shift ; START_REPLICA=$1 ;;
@@ -190,6 +193,22 @@ EOF
   cd ${dir}
   cpptraj -i ${dir}/remove_hoh.in  || { echo "Error: cpptraj failed during RemoveWat"; exit 1; }
   cd ${WDDIR}
+}
+
+function RemoveWatMMPBSA() {
+  # Obtain unsolvated trajectory from min2.rst7 file.
+  local dir=$1
+  cat > ${dir}/remove_hoh_MMPBSA_rescore.in <<EOF
+parm ${TOPO}
+trajin min2.rst7
+strip :WAT,Na+,K+,Cl-
+autoimage :1-${TOTALRES}
+trajout ./min2_noWAT.nc
+EOF
+
+  cd ${dir}
+  cpptraj -i ${dir}/remove_hoh_MMPBSA_rescore.in  || { echo "Error: cpptraj failed during RemoveWatMMPBSA"; exit 1; }
+  cd ${WDDIR} 
 }
 
 function RMSD() {
@@ -309,7 +328,11 @@ function Process() {
     if [[ ${PROCESS_WAT} -eq 1 ]]; then
       RemoveWat ${EQUI_DIR} ${EQUI_DIR}/md_nvt_ntr.nc ${EQUI_DIR}/*npt_equil*.nc
     fi
-
+    
+    if [[ ${MMPBSA_RESCORE} -eq 1 ]]; then
+      RemoveWatMMPBSA ${EQUI_DIR}
+    fi
+    
     if [[ ${PROCESS_RMSD} -eq 1 ]]; then
       RMSD ${EQUI_DIR} ${target} ${mode}
     fi
@@ -321,12 +344,17 @@ function Process() {
     if [[ ${PROCESS_IHBOND} -eq 1 ]]; then
       IntermolecularHBond ${EQUI_DIR} ${target} ${mode}
     fi
+
   fi
 
   if [[ ${PROCESS_PROD} -eq 1 ]]; then
 
     if [[ ${PROCESS_WAT} -eq 1 ]]; then
       RemoveWat ${PROD_DIR} ${PROD_DIR}/*md_prod*.nc
+    fi
+    
+    if [[ ${MMPBSA_RESCORE} -eq 1 ]]; then
+      RemoveWatMMPBSA ${PROD_DIR}
     fi
 
     if [[ ${PROCESS_RMSD} -eq 1 ]]; then
