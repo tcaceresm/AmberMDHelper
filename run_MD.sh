@@ -279,6 +279,8 @@ RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
+    echo "Doing protein-only mode, receptor name: ${RECEPTOR_NAME}"
+    echo "Rep. number: ${REP}"
     ParseDirectories "prot_only"
 
     if [[ ${RUN_EQUI} -eq 1 ]]; then
@@ -305,6 +307,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       # Required for both MD and MMPBSA
       LIG_NAME=$(basename ${LIG_NAME} .mol2)
       echo "Doing ligand: ${LIG_NAME}"
+      echo "Rep. number: ${REP}"
 
       ParseDirectories "prot_lig" ${LIG_NAME}
       
