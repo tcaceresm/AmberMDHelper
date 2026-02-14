@@ -751,8 +751,8 @@ EOF
 
 function ParseTime() {
   # Parse time in ns to nstlim
-  NSTLIM_PROD=$((500000 * ${PROD_TIME}))
-  NSTLIM_EQUI=$((500000 * ${EQUI_TIME}))
+  NSTLIM_PROD=$(awk "BEGIN {printf \"%d\", 500000 * $PROD_TIME}")
+  NSTLIM_EQUI=$(awk "BEGIN {printf \"%d\", 500000 * $EQUI_TIME}")
 }
 
 function ProtocolMD() {
