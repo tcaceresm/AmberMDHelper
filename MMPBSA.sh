@@ -42,8 +42,9 @@ Help() {
   #echo " -x, --trajectory   <file>       Unsolvated trajectory used to compute MM/PBSA calculations. This can be obtained using process_MD.sh"
   echo "Optional:"
   echo " -h, --help                      Show this help."
-  echo " --equi             <0|1>        (default=1) Use trajectory from equilibration phase (noWAT_traj.nc)"
-  echo " --prod             <0|1>        (default=1) Use trajectory from production phase (noWAT_traj.nc)."
+  echo " --equi             <0|1>        (default=1) Perform MM/PBSA using equilibration phase trajectory (noWAT_traj.nc)"
+  echo " --prod             <0|1>        (default=1) Perform MM/PBSA using production phase trajectory (noWAT_traj.nc)."
+  echo " --rescore          <0|1>        (default=0) Perform MM/PBSA using minimized (2-step energy minimization) structure from equilibration phase."
   echo " --interval         <integer>    (default=1) The offset from which to choose frames from each trajectory file."
   echo " -n, --replicas     <integer>    (default=3) Number of replicas or repetitions."
   echo " --start_replica    <integer>    (default=1) Run from --start_replica to --replicas."
@@ -62,6 +63,7 @@ fi
 
 RUN_EQUI=1
 RUN_PROD=1
+RUN_RESCORE=0
 INTERVAL=1
 START_REPLICA=1
 REPLICAS=3
@@ -74,8 +76,9 @@ INPUT_FILE="mm_pbsa.in"
 while [[ $# -gt 0 ]]; do
   case "$1" in
   '-d' | '--work_dir'        ) shift ; WDDIR=$1 ;;
-  '--equi'               ) shift ; RUN_EQUI=$1 ;;
-  '--prod'               ) shift ; RUN_PROD=$1 ;;
+  '--equi'                   ) shift ; RUN_EQUI=$1 ;;
+  '--prod'                   ) shift ; RUN_PROD=$1 ;;
+  '--rescore'                ) shift ; RUN_RESCORE=$1 ;;
   '--interval'               ) shift ; INTERVAL=$1 ;;
   '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
   '--start_replica'          ) shift ; START_REPLICA=$1 ;;
@@ -112,7 +115,11 @@ function ParseDirectory() {
   local lig=$2
   local rep=$3
 
-  MMPBSA_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/${mode}/npt/mmpbsa
+  if [[ "mode" == "rescore" ]]; then
+    MMPBSA_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/equi/npt/mmpbsa_rescore
+  else
+    MMPBSA_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/${mode}/npt/mmpbsa
+  fi
   mkdir -p ${MMPBSA_DIR}
 
 }
@@ -153,6 +160,10 @@ function ParseFiles() {
     PROD_TRAJ="../noWAT_traj.nc"
     CheckFiles ${PROD_TRAJ}
   fi
+
+  if [[ "${mode}" == "rescore" ]]; then
+    RESCORE_TRAJ="../min2_noWAT.rst7"
+    CheckFiles ${RESCORE_TRAJ}
 }
 
 function CreateInputFile() {
@@ -228,6 +239,24 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     # Required for both MD and MMPBSA
     LIG_NAME=$(basename ${LIG_NAME} .mol2)
     echo "Doing ligand: ${LIG_NAME}"
+    echo "Rep. number: ${REP}"
+
+    if [[ ${RUN_RESCORE} -eq 1 ]]; then
+      echo "Doing MMPBSA rescoring"
+      ParseDirectory "rescore" ${LIG_NAME} ${REP}
+
+      cd ${MMPBSA_DIR}
+
+      ParseFiles "rescore" ${LIG_NAME} ${REP}
+      CreateInputFile ${MMPBSA_DIR}
+    
+      RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
+                ${EQUI_TRAJ} ${VAC_COM_TOPO} ${VAC_REC_TOPO} \
+                ${VAC_LIG_TOPO}
+    
+      cd ${WDDIR}
+      echo "Done"
+    fi
 
     if [[ ${RUN_EQUI} -eq 1 ]]; then
       echo "Doing equi MMPBSA"
