@@ -8,7 +8,12 @@
 
 #set -x
 
-# To do: add options for mmpbsa input file (mmpbsa.py)
+# To do: 
+#        1. Add options for mmpbsa input file (mmpbsa.py)
+#        2. Add a option to modify PBRadii.
+#           Instead of relying only in one topology file (the one created with setupMD script),            
+#           add an option to modify that topology, and create a new one using a specific PBRadii.
+#           This new topo file is the one used in MM/PBSA calculations, and it should be inside mmpbsa folder, not topo folder.
 
 function ScriptInfo() {
   DATE="2025"
