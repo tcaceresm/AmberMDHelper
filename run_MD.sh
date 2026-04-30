@@ -257,7 +257,7 @@ CheckVariable "WDDIR"
 WDDIR=$(realpath "$WDDIR")
 
 # Logging
-LOG_DIR="${WDDIR}/logs/$(date '+%Y-%m-%d_%H-%M-%S')"
+LOG_DIR="${WDDIR}/logs/runMD/$(date '+%Y-%m-%d_%H-%M-%S')"
 mkdir -p "${LOG_DIR}"
 MAIN_LOG="${LOG_DIR}/main.log"
 
