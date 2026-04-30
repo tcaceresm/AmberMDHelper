@@ -28,24 +28,28 @@ EOF
 
 Help() {
   ScriptInfo
-  echo -e "\nUsage: bash run_MD.sh OPTIONS\n"
-  echo "This script runs molecular dynamics simulations in the specified directory previously configured with setup_MD.sh"
-  echo -e "The specified directory must always have a folder named  \"receptor\" containing the receptor PDB 
-and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of ligands and cofactor, respectively.\n"
+  cat <<EOF
 
-  echo "Required options:"
-  echo " -d, --work_dir     <DIR>        Working directory. Inside this directory, a folder named setupMD should exist, containing all input files."
-  echo "Optional:"
-  echo " -h, --help                      Show this help."
-  echo " --prot_only        <0|1>        (default=0) Run only-protein MD."
-  echo " --prot_lig         <0|1>        (default=0) Run protein-ligand MD."
-  echo " --run_equi         <0|1>        (default=1) Run equilibration phase."
-  echo " --run_prod         <0|1>        (default=1) Run production phase."
-  echo " -n, --replicas     <integer>    (default=3) Number of replicas or repetitions."
-  echo " --start_replica    <integer>    (default=1) Run from --start_replica to --replicas."
-  echo " --mmpbsa_rescoring <0|1>        (default=0) Run MM/PBSA rescoring."
-  #echo " --mmpbsa_crd      <file>       (NoDefault) Coordinates used for MM/PBSA calculations."   
-  echo " --MD_prog          <str>        (default="pmemd.cuda") Program used to run MD."
+Usage: bash run_MD.sh OPTIONS
+
+This script runs molecular dynamics simulations in the specified directory
+previously configured with setup_MD.sh. The specified directory must always
+have a folder named "receptor" containing the receptor PDB and an optional
+"ligands" and "cofactor" folder containing MOL2 file of ligands and cofactor, respectively.
+
+Required options:
+  -d, --work_dir     <DIR>        Working directory. Inside this directory, 
+                                  a folder named setupMD should exist, containing all input files.
+Optional:
+  -h, --help                      Show this help.
+  --prot_only        <0|1>        (default=0) Run only-protein MD.
+  --prot_lig         <0|1>        (default=0) Run protein-ligand MD.
+  --run_equi         <0|1>        (default=1) Run equilibration phase.
+  --run_prod         <0|1>        (default=1) Run production phase.
+  -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
+  --start_replica    <integer>    (default=1) Run from --start_replica to --replicas.
+  --MD_prog          <str>        (default="pmemd.cuda") Program used to run MD.
+EOF
 }
 
 # Default values
