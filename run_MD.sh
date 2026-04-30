@@ -183,13 +183,23 @@ function RunMD() {
     echo "${INPUT_FILE} already executed succesfully."
     echo "Skipping."
   
-  else  
+  else  # run MD
     echo "Running ${INPUT_FILE}.in"
 
-    ${MD_PROG} -O -i ${INPUT_FILE}.in -o ${INPUT_FILE}.out -p ${TOPO}.parm7 -x ${INPUT_FILE}.nc \
-              -r ${INPUT_FILE}.rst7 -c ${RESTART_FILE}.rst7 -ref ${CRD}.rst7 -inf ${INPUT_FILE}.info \
-              && touch "${INPUT_FILE}_successful.tmp" \
-              || { echo "Error: ${MD_PROG} failed during ${INPUT_FILE}"; exit 1; }
+    ${MD_PROG} -O \
+        -i   "${INPUT_FILE}.in"     \
+        -o   "${INPUT_FILE}.out"    \
+        -p   "${TOPO}.parm7"        \
+        -x   "${INPUT_FILE}.nc"     \
+        -r   "${INPUT_FILE}.rst7"   \
+        -c   "${RESTART_FILE}.rst7" \
+        -ref "${CRD}.rst7"          \
+        -inf "${INPUT_FILE}.info"
+    
+    if [[ $? -ne 0 ]]; then
+        echo "Error: ${MD_PROG} failed during ${INPUT_FILE} (non-zero exit code)."
+        exit 1
+    fi
 
     echo "Done ${INPUT_FILE}."
   fi
