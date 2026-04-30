@@ -828,7 +828,7 @@ SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WDDIR=$(realpath "$WDDIR")
 
 # Logging se inicializa aquí porque necesita WDDIR resuelto
-LOG_DIR="${WDDIR}/logs/$(date '+%Y-%m-%d_%H-%M-%S')"
+LOG_DIR="${WDDIR}/setupMD/logs/$(date '+%Y-%m-%d_%H-%M-%S')"
 mkdir -p "${LOG_DIR}"
 MAIN_LOG="${LOG_DIR}/main.log"
 
