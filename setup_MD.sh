@@ -86,7 +86,7 @@ BOX_SIZE=14
 # CLI option parser
 while [[ $# -gt 0 ]]; do
   case "$1" in
-  '-d' | '--work_dir'        ) shift ; WDPATH=$1 ;;
+  '-d' | '--work_dir'        ) shift ; WDDIR=$1 ;;
   '--prod_time'              ) shift ; PROD_TIME=$1 ;;
   '--equi_time'              ) shift ; EQUI_TIME=$1 ;;
   '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
@@ -168,8 +168,8 @@ function CheckProgram() {
 
 function CheckProtLigDir() {
 
-  if [[ ! -d "${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD" ]]; then
-    echo "Error: "${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD" \
+  if [[ ! -d "${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD" ]]; then
+    echo "Error: "${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD" \
 directory doesn't exist. In this case, this means that you're trying \
 to process ligands but you haven't configured the proteinLigandMD \
 directories. Try adding --prot_lig 1 option."
@@ -183,7 +183,7 @@ function CreateProtOnlyDirs() {
   # Add something here
   local rec_name=$1
 
-  PROT_ONLY_BASE_DIR="${WDPATH}/setupMD/${rec_name}/onlyProteinMD/"
+  PROT_ONLY_BASE_DIR="${WDDIR}/setupMD/${rec_name}/onlyProteinMD/"
   mkdir -p ${PROT_ONLY_BASE_DIR}/topo
 
   for rep in $(seq 1 ${REPLICAS}); do
@@ -196,12 +196,12 @@ function CreateProtOnlyDirs() {
 
 function LigParser() {
   # Ligands' related variable
-  # Raw ligands are in WDPATH/ligands dir
+  # Raw ligands are in WDDIR/ligands dir
   # These are GLOBAL variables.
   shopt -s nullglob
-  LIGANDS_PATH=("${WDPATH}/ligands/"*.mol2)
+  LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
   shopt -u nullglob
-  # WDPATH/ligands can't be empty if PREP_LIG is activated.
+  # WDDIR/ligands can't be empty if PREP_LIG is activated.
   if [[ ${PREP_LIG} -eq 1 ]]; then
     if [[ ${#LIGANDS_PATH[@]} -eq 0 ]]; then
       echo "Error: --prep_lig is 1 but ligands folder is empty."
@@ -214,7 +214,7 @@ function LigParser() {
   for LIGAND_PATH in ${LIGANDS_PATH[@]}; do
     LIGAND_NAME=$(basename "${LIGAND_PATH}" .mol2)
     LIGANDS_NAME+=("$LIGAND_NAME")
-    LIGANDS_LIB_DIR+=("${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}/lib")
+    LIGANDS_LIB_DIR+=("${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}/lib")
   done
 
 }
@@ -230,7 +230,7 @@ function CreateProtLigDirs() {
 
   local lig
   for lig in "$@"; do
-    local prot_lig_base_dir="${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}"
+    local prot_lig_base_dir="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}"
     mkdir -p ${prot_lig_base_dir}/{lib,MD,topo}
     
     for rep in $(seq 1 ${REPLICAS}); do
@@ -244,19 +244,19 @@ function CreateProtLigDirs() {
 
 function CofParser() {
   # Cofactor related variable
-  # Raw cofactor is in WDPATH/cofactor dir
+  # Raw cofactor is in WDDIR/cofactor dir
   shopt -s nullglob
-  COFACTOR_PATH=("${WDPATH}/cofactor/"*.mol2)
+  COFACTOR_PATH=("${WDDIR}/cofactor/"*.mol2)
   shopt -u nullglob
 
   #local rec_name=$1
 
   if [[ ${#COFACTOR_PATH[@]} -eq 0 ]]; then
-    echo "Error: --prep_cof is 1 but WDPATH/cofactor directory is empty."
+    echo "Error: --prep_cof is 1 but WDDIR/cofactor directory is empty."
     exit 1
   else
-    COFACTOR_NAME=$(basename "${WDPATH}/cofactor/"*.mol2 .mol2)
-    COFACTOR_LIB_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/cofactor_lib/${COFACTOR_NAME}"
+    COFACTOR_NAME=$(basename "${WDDIR}/cofactor/"*.mol2 .mol2)
+    COFACTOR_LIB_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/cofactor_lib/${COFACTOR_NAME}"
 
   fi
 }
@@ -275,10 +275,10 @@ function PrepareReceptor() {
   log "Preparing receptor: ${rec_name}"
   log "======================================"
 
-  CheckVariable "rec_name" "WDPATH"
+  CheckVariable "rec_name" "WDDIR"
 
-  local receptor_pdb_file="${WDPATH}/receptor/${rec_name}.pdb"
-  local prep_pdb_path="${WDPATH}/setupMD/${rec_name}/receptor/"
+  local receptor_pdb_file="${WDDIR}/receptor/${rec_name}.pdb"
+  local prep_pdb_path="${WDDIR}/setupMD/${rec_name}/receptor/"
   local prep_pdb_file="${prep_pdb_path}/${rec_name}_prep.pdb"
 
   mkdir -p ${prep_pdb_path}
@@ -321,7 +321,7 @@ function PrepareSmallMolecule() {
   log "Preparing small molecule: ${lig_name} (mode=${mode})"
   log "======================================"
 
-  # copy from WDPATH/ligands/ to lib_dir
+  # copy from WDDIR/ligands/ to lib_dir
   cp ${lig_path} ${lig_lib_dir} || exit 1
   cd ${lig_lib_dir}
   
@@ -356,7 +356,7 @@ quit
 EOF
     tleap -f "leap_lib.in" > prepare_ligand.log 2>&1
     log "Done preparing small molecule: ${lig_name}"
-    cd ${WDPATH}
+    cd ${WDDIR}
 }
 
 
@@ -409,7 +409,7 @@ function TopologyParser() {
   ParseTopologyOptions "$@"
 
   if [[ ${MODE} == "prot_only" ]]; then
-    TOPO_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/topo"
+    TOPO_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/topo"
     PREP_PDB_DIR="../../receptor"
     TOPO_NAME=${RECEPTOR_NAME} #
     if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
@@ -417,7 +417,7 @@ function TopologyParser() {
     fi
 
   elif [[ ${MODE} == "prot_lig" ]]; then
-    TOPO_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIG}/topo"
+    TOPO_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIG}/topo"
     PREP_PDB_DIR="../../../receptor"
     LIG_LIB_DIR="../lib"
     TOPO_NAME=${LIG} #
@@ -520,7 +520,7 @@ EOF
   log "Running tleap for topology: ${TOPO_NAME}"
   tleap -f ./tleap.in || { log "ERROR: tleap failed during ${tleap_input}"; exit 1; }
   log "Done preparing topology: ${TOPO_NAME}"
-  cd ${WDPATH}
+  cd ${WDDIR}
 
 }
 
@@ -819,28 +819,28 @@ function log() {
 ScriptInfo
 
 # Required options
-CheckVariable "WDPATH"
+CheckVariable "WDDIR"
 
 # Path of this scripts and input files
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Path of the working directory which contains receptor, ligand (optional) and cofactor (optional) folders
-WDPATH=$(realpath "$WDPATH")
+WDDIR=$(realpath "$WDDIR")
 
-# Logging  se inicializa aquí porque necesita WDPATH resuelto
-LOG_DIR="${WDPATH}/logs/$(date '+%Y-%m-%d_%H-%M-%S')"
+# Logging se inicializa aquí porque necesita WDDIR resuelto
+LOG_DIR="${WDDIR}/logs/$(date '+%Y-%m-%d_%H-%M-%S')"
 mkdir -p "${LOG_DIR}"
 MAIN_LOG="${LOG_DIR}/main.log"
 
 log "=========================================="
 log "Starting setup_MD"
-log "Working directory: ${WDPATH}"
+log "Working directory: ${WDDIR}"
 log "Replicas: ${REPLICAS}"
 log "Log directory: ${LOG_DIR}"
 log "=========================================="
 
-CheckUniqueFile ${WDPATH}/receptor/
-RECEPTOR_NAME=$(basename "${WDPATH}/receptor/"*.pdb .pdb)
+CheckUniqueFile ${WDDIR}/receptor/
+RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 log "Receptor: ${RECEPTOR_NAME}"
 
 ###### Test ######
@@ -929,7 +929,7 @@ if [[ ${PREP_MD} -eq 1 ]]; then
     TopologyParser mode "prot_only"
     TotalResWrapper ${TOPO_DIR}/${RECEPTOR_NAME}_vac_${TARGET}.parm7
 
-    MODE_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/onlyProteinMD"
+    MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD"
     for REP in $(seq 1 ${REPLICAS}); do
     
       log "  Creating MD files: prot_only | rep ${REP}"
@@ -954,7 +954,7 @@ if [[ ${PROT_LIG_MD} -eq 1 ]]; then
       TopologyParser "mode" "prot_lig" "lig" ${LIGAND_NAME}
       TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
 
-      MODE_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
+      MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
       EQUI_DIR="${MODE_DIR}/MD/rep${REP}/equi/${ENSEMBLE}"
       PROD_DIR="${MODE_DIR}/MD/rep${REP}/prod/${ENSEMBLE}"
 
