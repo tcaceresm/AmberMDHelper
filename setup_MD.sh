@@ -108,10 +108,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 function CheckVariable() {
-  # Check if variable is not empty
-  for ARG in "$@"; do
-    if [[ -z ${ARG} ]]; then
-      echo "Error: variable ${ARG}."
+  # Check if variable is empty or not defined.
+  local var_name var_value
+  for var_name in "$@"; do
+    var_value="${!var_name}"  # indirección: obtiene el valor por nombre
+    if [[ -z "${var_value}" ]]; then
+      echo "Error: variable '${var_name}' is empty or not defined." >&2
       exit 1
     fi
   done
@@ -153,7 +155,7 @@ function CheckUniqueFile() {
 function CheckProgram() {
   # Check if command is available
   for COMMAND in "$@"; do
-    if ! command -v ${1} >/dev/null 2>&1; then
+    if ! command -v ${COMMAND} >/dev/null 2>&1; then
       echo "Error: ${1} program not available, exiting."
       exit 1
     fi
@@ -255,9 +257,9 @@ function CofParser() {
   fi
 }
 function CreateCofDir() {
-  rec_name=$1
-  cof_name=$2
-  CheckVariable "${COFACTOR_LIB_DIR}"
+  local rec_name=$1
+  local cof_name=$2
+  CheckVariable "COFACTOR_LIB_DIR"
   mkdir -p ${COFACTOR_LIB_DIR}
   echo -e "\nCreated cofactor directory."
 }
@@ -269,7 +271,7 @@ function PrepareReceptor() {
   echo " Preparing receptor: ${rec_name}"
   echo "####################################"
 
-  CheckVariable "${rec_name}" "${WDPATH}"
+  CheckVariable "rec_name" "WDPATH"
 
   local receptor_pdb_file="${WDPATH}/receptor/${rec_name}.pdb"
   local prep_pdb_path="${WDPATH}/setupMD/${rec_name}/receptor/"
@@ -535,7 +537,7 @@ ParseAmberOptions() {
       'ntwx'          ) shift ; NTWX=$1 ;;
       'ntpr'          ) shift ; NTPR=$1 ;;
       'ntwr'          ) shift ; NTWR=$1 ;;
-      'previousref'   ) REF=$RST ;;
+      'previousref'   ) shift ; REF=$RST ;;
       'thermo'        ) shift ; THERMOTYPE=$1 ;;
       'ntp'           ) shift ; NTP=$1 ;;
       'baro'          ) shift ; BAROTYPE=$1 ;;
@@ -551,13 +553,7 @@ function CreateMinInput() {
   STEP=$1
   INPUT="${STEP}.in"
   shift
-  IREST=0
-  if [[ ${IREST} -eq 1 ]]; then
-    NTX=5
-  else
-    NTX=1
-  fi
-  
+
   IMIN=1
   NTPR=100
 
@@ -603,12 +599,6 @@ function createMdInput() {
   STEP=$1
   INPUT="${STEP}.in"
   shift
-  IREST=1
-  if [[ ${IREST} -eq 1 ]]; then
-    NTX=5
-  else
-    NTX=1
-  fi
   
   NTPR=5000
   NTWX=5000
@@ -649,6 +639,12 @@ function createMdInput() {
   VALUE2=""
 
   ParseAmberOptions "$@"
+
+  if [[ ${IREST} -eq 1 ]]; then
+    NTX=5
+  else
+    NTX=1
+  fi
 
   cat > ${INPUT} <<-EOF
 ${STEP}
@@ -778,7 +774,7 @@ function ProtocolMD() {
                 varycond 'TEMP0' 0 20000 100.0 300.0 \
                 tempi 100
 
-  createMdInput npt_equil_1 ntp 1 ntb 2 nstlim 50000 \
+  createMdInput npt_equil_1 irest 1 ntx 5 ntp 1 ntb 2 nstlim 50000 \
                 ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 5.0
   createMdInput npt_equil_2 ntp 1 ntb 2 nstlim 25000 \
                 ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 4.0
@@ -805,7 +801,7 @@ function ProtocolMD() {
 ScriptInfo
 
 # Required options
-CheckVariable "${WDPATH}"
+CheckVariable "WDPATH"
 
 # Path of this scripts and input files
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
