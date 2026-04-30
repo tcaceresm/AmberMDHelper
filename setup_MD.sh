@@ -191,7 +191,7 @@ function CreateProtOnlyDirs() {
       mkdir -p "${PROT_ONLY_BASE_DIR}/MD/rep${rep}/${subdir}"
     done
   done
-  echo -e "\nCreated Protein-only directories."
+  log "Created Protein-only directories under ${PROT_ONLY_BASE_DIR}"
 }
 
 function LigParser() {
@@ -239,7 +239,7 @@ function CreateProtLigDirs() {
       done
     done
   done
-  echo -e "\nCreated Protein-Ligand directories."
+  log "Created Protein-Ligand directories for ${#@} ligand(s)"
 }
 
 function CofParser() {
@@ -265,15 +265,15 @@ function CreateCofDir() {
   local cof_name=$2
   CheckVariable "COFACTOR_LIB_DIR"
   mkdir -p ${COFACTOR_LIB_DIR}
-  echo -e "\nCreated cofactor directory."
+  log "Created cofactor directory: ${COFACTOR_LIB_DIR}"
 }
 
 function PrepareReceptor() {
   # Process receptor using pdb4amber
   local rec_name=$1
-  echo -e "\n####################################"
-  echo " Preparing receptor: ${rec_name}"
-  echo "####################################"
+  log "======================================"
+  log "Preparing receptor: ${rec_name}"
+  log "======================================"
 
   CheckVariable "rec_name" "WDPATH"
 
@@ -287,10 +287,11 @@ function PrepareReceptor() {
   cp ${receptor_pdb_file} ${prep_pdb_path}/${rec_name}_raw.pdb || exit 1
   
   CheckProgram "pdb4amber"
+  log "Running pdb4amber on ${rec_name}.pdb"
   pdb4amber -i ${prep_pdb_path}/${rec_name}_raw.pdb \
   -o ${prep_pdb_file} -l ${prep_pdb_path}/prepare_receptor.log
 
-  echo -e "\nDone preparing receptor ${rec_name}\n"
+  log "Done preparing receptor ${rec_name}"
 }
 
 function NetCharge() {
@@ -299,10 +300,11 @@ function NetCharge() {
   local lig_lib_dir=$1
   local lig_name=$2
 
-  echo -e "\nComputing net charge from partial charges of ${lig_name} file"
+  log "Computing net charge of ${lig_name}"
   LIGAND_NET_CHARGE=$(awk '/ATOM/{ f = 1; next } /BOND/{ f = 0 } f' ${lig_lib_dir}/${lig_name}.mol2 \
                       | awk '{sum += $9} END {printf "%.0f\n", sum}')
-  echo -e "Net charge of ${lig_name}: ${LIGAND_NET_CHARGE}" | tee ${lig_lib_dir}/ligand_net_charge.log
+  log "Net charge of ${lig_name}: ${LIGAND_NET_CHARGE}"
+  echo "${LIGAND_NET_CHARGE}" > ${lig_lib_dir}/ligand_net_charge.log
 }
 
 function PrepareSmallMolecule() {
@@ -315,7 +317,9 @@ function PrepareSmallMolecule() {
 
   CheckProgram "antechamber" "parmchk2" "tleap"
 
-  echo -e "\nPreparing small molecule: ${lig_name}"
+  log "======================================"
+  log "Preparing small molecule: ${lig_name} (mode=${mode})"
+  log "======================================"
 
   # copy from WDPATH/ligands/ to lib_dir
   cp ${lig_path} ${lig_lib_dir} || exit 1
@@ -324,10 +328,12 @@ function PrepareSmallMolecule() {
   NetCharge ${lig_lib_dir} ${lig_name}
 
   if [[ ${COMPUTE_CHARGES} -eq 1 ]]; then
+    log "Running antechamber with charge method: ${CHARGE_METHOD}"
     antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
     -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 -c "${CHARGE_METHOD}" \
     -nc "${LIGAND_NET_CHARGE}" -at ${LIG_FF} -rn "${mode}" -pf y
   else
+    log "Running antechamber (no charge calculation)"
     antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
     -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 -at ${LIG_FF} -rn "${mode}" -pf y
   fi
@@ -336,6 +342,7 @@ function PrepareSmallMolecule() {
                                 -fo pdb -dr n -at ${LIG_FF} -rn "${mode}"
   parmchk2 -i "${lig_lib_dir}/${lig_name}.mol2" -f mol2 -o "${lig_lib_dir}/${lig_name}.frcmod"
 
+  log "Running tleap to generate ${lig_name}.lib"
   cat > ${lig_lib_dir}/leap_lib.in <<EOF
 source leaprc.water.${WATER_MODEL}
 source leaprc.${LIG_FF}
@@ -348,6 +355,7 @@ saveoff ${mode} ${lig_name}.lib
 quit
 EOF
     tleap -f "leap_lib.in" > prepare_ligand.log 2>&1
+    log "Done preparing small molecule: ${lig_name}"
     cd ${WDPATH}
 }
 
@@ -430,7 +438,9 @@ function PrepareTopology() {
   #ParseTopologyOptions "$@"
   CheckProgram "tleap"
 
-  echo -e "\n# Preparing Topologies #"
+  log "======================================"
+  log "Preparing topologies (mode=${MODE}, target=${TARGET})"
+  log "======================================"
   
   cd ${TOPO_DIR}
 
@@ -507,8 +517,9 @@ saveAmberParm ${TARGET} ./${TOPO_NAME}_solv_${TARGET}.parm7 ./${TOPO_NAME}_solv_
 quit
 EOF
 
-  #cd ${TOPO_DIR}
-  tleap -f ./tleap.in || { echo "Error: tleap failed during ${tleap_input}"; exit 1; }
+  log "Running tleap for topology: ${TOPO_NAME}"
+  tleap -f ./tleap.in || { log "ERROR: tleap failed during ${tleap_input}"; exit 1; }
+  log "Done preparing topology: ${TOPO_NAME}"
   cd ${WDPATH}
 
 }
@@ -796,6 +807,9 @@ function ProtocolMD() {
 
 }
 
+function log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${MAIN_LOG}"
+}
 
 ############################################################
 # Main script
@@ -813,8 +827,21 @@ SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Path of the working directory which contains receptor, ligand (optional) and cofactor (optional) folders
 WDPATH=$(realpath "$WDPATH")
 
+# Logging  se inicializa aquí porque necesita WDPATH resuelto
+LOG_DIR="${WDPATH}/logs/$(date '+%Y-%m-%d_%H-%M-%S')"
+mkdir -p "${LOG_DIR}"
+MAIN_LOG="${LOG_DIR}/main.log"
+
+log "=========================================="
+log "Starting setup_MD"
+log "Working directory: ${WDPATH}"
+log "Replicas: ${REPLICAS}"
+log "Log directory: ${LOG_DIR}"
+log "=========================================="
+
 CheckUniqueFile ${WDPATH}/receptor/
 RECEPTOR_NAME=$(basename "${WDPATH}/receptor/"*.pdb .pdb)
+log "Receptor: ${RECEPTOR_NAME}"
 
 ###### Test ######
 
@@ -854,6 +881,7 @@ if [[ ${PREP_LIG} -eq 1 ]]; then
     LIG_NAME="${LIGANDS_NAME[$index]}"
     LIG_LIB_DIR="${LIGANDS_LIB_DIR[$index]}"
 
+    log "Processing ligand ${LIG_NAME} (${index}/${#LIGANDS_PATH[@]})"
     PrepareSmallMolecule "LIG" ${LIG_PATH} ${LIG_NAME} ${LIG_LIB_DIR} 
   done
 fi
@@ -862,7 +890,7 @@ if [[ ${PREP_COFACTOR} -eq 1 ]]; then
   if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
     PrepareSmallMolecule "COF" ${COFACTOR_PATH} ${COFACTOR_NAME} ${COFACTOR_LIB_DIR}
   else
-    echo "Error: If you want to prepare cofactor, set --include_cof 1."
+    log "ERROR: If you want to prepare cofactor, set --include_cof 1."
     exit 1
   fi
 fi
@@ -873,15 +901,14 @@ fi
 if [[ ${PREP_TOPO} -eq 1 ]]; then
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
-
+    log "Creating topology: prot_only"
     TopologyParser "mode" "prot_only"
-
     PrepareTopology
-  
   fi
 
   if [[ ${PROT_LIG_MD} -eq 1 ]]; then
     for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
+      log "Creating topology: prot_lig | ligand: ${LIGAND_NAME}"
       TopologyParser  "mode" "prot_lig" "lig" ${LIGAND_NAME}
       PrepareTopology 
     done
@@ -898,19 +925,21 @@ if [[ ${PREP_MD} -eq 1 ]]; then
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
 
+    log "Creating MD input files: prot_only"
     TopologyParser mode "prot_only"
     TotalResWrapper ${TOPO_DIR}/${RECEPTOR_NAME}_vac_${TARGET}.parm7
 
     MODE_DIR="${WDPATH}/setupMD/${RECEPTOR_NAME}/onlyProteinMD"
     for REP in $(seq 1 ${REPLICAS}); do
     
+      log "  Creating MD files: prot_only | rep ${REP}"
       EQUI_DIR="${MODE_DIR}/MD/rep${REP}/equi/${ENSEMBLE}"
       PROD_DIR="${MODE_DIR}/MD/rep${REP}/prod/${ENSEMBLE}"
       ProtocolMD ${EQUI_DIR} ${PROD_DIR} ${TOTALRES} ${NSTLIM_EQUI} ${NSTLIM_PROD}
     
     done
     
-    echo -e "\nDone creating MD files for prot only."
+    log "Done creating MD files for prot_only."
   fi
 fi
 
@@ -921,6 +950,7 @@ if [[ ${PROT_LIG_MD} -eq 1 ]]; then
   for REP in $(seq 1 ${REPLICAS}); do
     for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
 
+      log "Creating MD input files: prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
       TopologyParser "mode" "prot_lig" "lig" ${LIGAND_NAME}
       TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
 
@@ -930,7 +960,7 @@ if [[ ${PROT_LIG_MD} -eq 1 ]]; then
 
       if [[ ${PREP_MD} -eq 1 ]]; then
         ProtocolMD ${EQUI_DIR} ${PROD_DIR} ${TOTALRES} ${NSTLIM_EQUI} ${NSTLIM_PROD}
-        echo -e "\nDone creating MD files for prot-lig."
+        log "Done creating MD files for prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
       fi
     done
   done
@@ -938,3 +968,6 @@ if [[ ${PROT_LIG_MD} -eq 1 ]]; then
 fi
 
 ## ====== End Create MD files ======
+log "=========================================="
+log "setup_MD completed successfully"
+log "=========================================="
