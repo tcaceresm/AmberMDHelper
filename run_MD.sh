@@ -99,6 +99,31 @@ function CheckFiles() {
   done
 }
 
+function CheckUniqueFile() {
+  # Support for only 1 cofactor and 1 pdb per run.
+  local folder="$1"
+  local count=$(find "${folder}" -maxdepth 1 \( -name "*.pdb" -o -name "*.mol2" \) | wc -l)
+
+  if [[ ${count} -gt 1 ]]; then
+    echo "$(basename ${folder}) folder contain more than one PDB or mol2 file."
+    echo "Exiting."
+    exit 1
+  fi
+
+}
+
+function CheckVariable() {
+  # Check if variable is empty or not defined.
+  local var_name var_value
+  for var_name in "$@"; do
+    var_value="${!var_name}"  # indirección: obtiene el valor por nombre
+    if [[ -z "${var_value}" ]]; then
+      echo "Error: variable '${var_name}' is empty or not defined." >&2
+      exit 1
+    fi
+  done
+}
+
 function ParseDirectories() {
   # Configure directories
   local mode=$1
@@ -272,9 +297,16 @@ function RunMMPBSArescoreProtocol() {
 # Main
 ############################################################
 
+CheckVariable "WDDIR"
 WDDIR=$(realpath "$WDDIR")
 
+CheckUniqueFile ${WDPATH}/receptor/
 RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
+
+if [[ ${PROT_ONLY_MD} -eq 0 && ${PROT_LIG_MD} -eq 0 ]]; then
+    echo "Error: Must provide --prot_only or --prot_lig options."
+    exit 1
+fi
 
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
@@ -326,10 +358,6 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       fi
     done
 
-  else
-    echo "Error: Must provide --prot_only or --prot_lig options."
-    echo "Check help with --help."
-    exit 1
   fi
 
 done
