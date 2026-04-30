@@ -63,14 +63,6 @@ ENSEMBLE="npt"
 MMPBSA=0
 MD_PROG="pmemd.cuda"
 
-# Logging
-LOG_DIR="logs/$(date '+%Y-%m-%d_%H-%M-%S')"
-mkdir -p "${LOG_DIR}"
-MAIN_LOG="${LOG_DIR}/main.log"
-
-log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${MAIN_LOG}"
-}
 
 # CLI option parser
 while [[ $# -gt 0 ]]; do
@@ -173,28 +165,26 @@ function RunMD() {
   # Actually run the MD
   INPUT_FILE=$1
   RESTART_FILE=$2
-  local MD_LOG="${LOG_DIR}/${INPUT_FILE}.log"
-
-  md_log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [${INPUT_FILE}] $*" | tee -a "${MD_LOG}" >> "${MAIN_LOG}"
-  }
 
   CheckProgram ${MD_PROG}
 
   # TOPO and CRD variable comes from ParseDirectories
   # Check if already run, or if finished incorrectly
   # -ref flag is ignored when ntr is 0
-
+  
   if [[ -f "${INPUT_FILE}.nc" && ! -f "${INPUT_FILE}_successful.tmp" ]]; then
-    md_log "ERROR: output exists but did not finish correctly. Check ${INPUT_FILE}.out"
+    echo "${INPUT_FILE} output exists but didn't finished correctly".
+    echo "Please check ${INPUT_FILE}.out"
+    echo "Exiting."
     exit 1
   fi
 
   if [[ -f "${INPUT_FILE}_successful.tmp" ]]; then
-    md_log "Already executed successfully. Skipping."
-
+    echo "${INPUT_FILE} already executed succesfully."
+    echo "Skipping."
+  
   else  # run MD
-    md_log "Starting ${MD_PROG}"
+    echo "Running ${INPUT_FILE}.in"
 
     ${MD_PROG} -O \
         -i   "${INPUT_FILE}.in"     \
@@ -205,13 +195,13 @@ function RunMD() {
         -c   "${RESTART_FILE}.rst7" \
         -ref "${CRD}.rst7"          \
         -inf "${INPUT_FILE}.info"
-
+    
     if [[ $? -ne 0 ]]; then
-      md_log "ERROR: ${MD_PROG} failed (non-zero exit code). Check ${INPUT_FILE}.out"
-      exit 1
+        echo "Error: ${MD_PROG} failed during ${INPUT_FILE} (non-zero exit code)."
+        exit 1
     fi
 
-    md_log "Finished successfully."
+    echo "Done ${INPUT_FILE}."
   fi
 }
 
@@ -261,26 +251,19 @@ function RunProtocol() {
 CheckVariable "WDDIR"
 WDDIR=$(realpath "$WDDIR")
 
-log "=========================================="
-log "Starting run_MD"
-log "Working directory: ${WDDIR}"
-log "Replicas: ${START_REPLICA} --> ${REPLICAS}"
-log "MD program: ${MD_PROG}"
-log "Log directory: ${LOG_DIR}"
-log "=========================================="
-
 CheckUniqueFile ${WDPATH}/receptor/
 RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 
 if [[ ${PROT_ONLY_MD} -eq 0 && ${PROT_LIG_MD} -eq 0 ]]; then
-    log "Error: Must provide --prot_only or --prot_lig options."
+    echo "Error: Must provide --prot_only or --prot_lig options."
     exit 1
 fi
 
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
-    log "Protein-only mode | receptor: ${RECEPTOR_NAME} | rep: ${REP}"
+    echo "Doing protein-only mode, receptor name: ${RECEPTOR_NAME}"
+    echo "Rep. number: ${REP}"
     ParseDirectories "prot_only"
 
     if [[ ${RUN_EQUI} -eq 1 ]]; then
@@ -298,7 +281,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
     
     if [[ ${#LIGANDS_PATH[@]} -eq 0 ]]; then
-      log "Error: --prot_lig is 1 but ligands folder is empty."
+      echo "Error: --prot_lig is 1 but ligands folder is empty."
       exit 1
     fi
 
@@ -306,7 +289,8 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
       # Required for both MD and MMPBSA
       LIG_NAME=$(basename ${LIG_NAME} .mol2)
-      log "Protein-ligand mode | ligand: ${LIG_NAME} | rep: ${REP}"
+      echo "Doing ligand: ${LIG_NAME}"
+      echo "Rep. number: ${REP}"
 
       ParseDirectories "prot_lig" ${LIG_NAME}
       
@@ -329,5 +313,4 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
 done
 
-log "Done."
 echo "Done."
