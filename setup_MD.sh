@@ -27,34 +27,38 @@ EOF
 }
 
 Help() {
-  ScriptInfo
-  echo -e "\nUsage: bash setup_MD.sh OPTIONS\n"
-  echo "This script sets up molecular dynamics simulations in the specified directory."
-  echo -e "The specified directory must always have a folder named  \"receptor\" containing the receptor PDB 
-and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of ligands and cofactor, respectively.\n"
+    ScriptInfo
+    cat <<EOF
 
-  echo "Required options:"
-  echo " -d, --work_dir     <path>       Working directory. Inside this directory, a folder named setupMD will be created which contains all necessary files."
-  echo "Optional:"
-  echo " -h, --help                      Show this help."
-  echo " --prod_time        <integer>    (default=100) Simulation time (in ns) (2 fs timestep)."
-  echo " --equi_time        <integer>    (default=10) Simulation time (in ns) of last step of equilibration (2 fs timestep)"
-  echo " -n, --replicas     <integer>    (default=3) Number of replicas or repetitions."
-  echo " --prot_only        <0|1>        (default=0) Setup only protein MD."
-  echo " --prot_lig         <0|1>        (default=0) Setup protein-ligand MD."
-  echo " --prep_rec         <0|1>        (default=1) Prepare receptor. Receptor MUST be already protonated."
-  echo " --prep_lig         <0|1>        (default=0) Prepare ligand. Ligand MUST be already protonated."
-  echo " --include_cof      <0|1>        (default=0) Include cofactor."
-  echo " --prep_cof         <0|1>        (default=0) Prepare cofactor if --include_cof 1. Cofactor MUST be already protonated."
-  echo " --prep_topology    <0|1>        (default=1) Prepare topology files."
-  echo " --prep_MD          <0|1>        (default=1) Prepare MD input files."
-  echo " --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1."
-  echo " --charge_method    <string>     (default="abcg2") Charge method if --calc_lig_charge 1."
-  #echo " --threads          <integer>    (default=1) Number of threads to execute this scripts. This is relevant when preparing several systems."
-  echo " --lig_ff           <gaff|gaff2> (default="gaff2") Small molecule forcefield. This applies both ligand and cofactor."
-  echo " --prot_ff          <string>     (default="ff19SB") Protein forcefield."
-  echo " --water_model      <string>     (default="opc") Water model used in MD."
-  echo " --box_size         <integer>    (default=14) Size of water box."
+Usage: bash setup_MD.sh OPTIONS
+
+This script sets up molecular dynamics simulations in the specified directory.
+The specified directory must always have a folder named "receptor" containing the receptor PDB
+and an optional "ligands" and "cofactor" folder containing MOL2 file of ligands and cofactor, respectively.
+
+Required options:
+  -d, --work_dir     <path>       Working directory. Inside this directory, a folder named setupMD will be created which contains all necessary files.
+
+Optional:
+  -h, --help                      Show this help.
+  --prod_time        <integer>    (default=100) Simulation time (in ns) (2 fs timestep).
+  --equi_time        <integer>    (default=10) Simulation time (in ns) of last step of equilibration (2 fs timestep).
+  -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
+  --prot_only        <0|1>        (default=0) Setup only protein MD.
+  --prot_lig         <0|1>        (default=0) Setup protein-ligand MD.
+  --prep_rec         <0|1>        (default=1) Prepare receptor. Receptor MUST be already protonated.
+  --prep_lig         <0|1>        (default=0) Prepare ligand. Ligand MUST be already protonated.
+  --include_cof      <0|1>        (default=0) Include cofactor.
+  --prep_cof         <0|1>        (default=0) Prepare cofactor if --include_cof 1. Cofactor MUST be already protonated.
+  --prep_topology    <0|1>        (default=1) Prepare topology files.
+  --prep_MD          <0|1>        (default=1) Prepare MD input files.
+  --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1.
+  --charge_method    <string>     (default="abcg2") Charge method if --calc_lig_charge 1.
+  --lig_ff           <gaff|gaff2> (default="gaff2") Small molecule forcefield. This applies both ligand and cofactor.
+  --prot_ff          <string>     (default="ff19SB") Protein forcefield.
+  --water_model      <string>     (default="opc") Water model used in MD.
+  --box_size         <integer>    (default=14) Size of water box.
+EOF
 }
 
 # Default values
