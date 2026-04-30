@@ -230,69 +230,6 @@ function RunProtocol() {
   fi
 }
 
-
-function MMPBSA() {
-  local input_file=$1
-  local input_crd=$2
-  local complex_topo=$3
-  local receptor_topo=$4
-  local ligand_topo=$5
-
-  CheckProgram "MMPBSA.py"
-
-  echo -e "Running MMPBSA rescoring.\n"
-  MMPBSA.py -i ${input_file} \
-            -y ${input_crd} \
-            -cp ${complex_topo} \
-            -rp ${receptor_topo} \
-            -lp ${ligand_topo} || \
-            { echo "Error running MMPBSA rescoring. Exiting."; exit 1; }
-
-}
-
-function ProcessMMPBSACoord () {
-  local crd=$1
-  local topo=$2
-
-  local crd_name=$(basename ${crd} .rst7)
-  
-  cat > remove_solvent.in <<EOF
-parm ${topo}
-trajin ${crd}
-strip :WAT,Na+,Cl-
-trajout ${crd}_noWAT.rst7
-EOF
-  cpptraj -i remove_solvent.in
-
-}
-
-function RunMMPBSArescoreProtocol() {
-
-  local mmpbsa_dir=$1
-  local input_crd=$2
-
-
-  # Two-step minimization
-  RunMD min1 "${CRD}" 
-  RunMD min2 min1
-
-  # Remove solvent and ions
-  ProcessMMPBSACoord ${input_crd} ${TOPO}
-
-  cd ${MMPBSA_rescore_DIR}/mmpbsa
-
-  local input_file="mm_pbsa.in"
-  local complex_topo=${VAC_COMPLEX_TOPO}
-  local receptor_topo=${VAC_REC_TOPO}
-  local ligand_topo=${VAC_LIG_TOPO}
-
-  MMPBSA ${input_file} \
-         ${input_crd} \
-         ${complex_topo} \
-         ${receptor_topo} \
-         ${ligand_topo}
-
-}
 ############################################################
 # Main
 ############################################################
