@@ -129,10 +129,12 @@ function CheckProgram() {
 }
 
 function CheckVariable() {
-  # Check if variable is not empty
-  for ARG in "$@"; do
-    if [[ -z ${ARG} ]]; then
-      echo "Error: variable ${ARG}."
+  # Check if variable is empty or not defined.
+  local var_name var_value
+  for var_name in "$@"; do
+    var_value="${!var_name}"  # indirección: obtiene el valor por nombre
+    if [[ -z "${var_value}" ]]; then
+      echo "Error: variable '${var_name}' is empty or not defined." >&2
       exit 1
     fi
   done
@@ -396,7 +398,7 @@ function CheckUniqueFile() {
 # Main
 ############################################################
 # Required options
-CheckVariable "${WDDIR}"
+CheckVariable "WDDIR"
 
 WDDIR=$(realpath "$WDDIR")
 
