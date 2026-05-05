@@ -169,6 +169,7 @@ function ParseFiles() {
   if [[ "${mode}" == "rescore" ]]; then
     RESCORE_TRAJ="../min2_noWAT.rst7"
     CheckFiles ${RESCORE_TRAJ}
+  fi
 }
 
 function CreateInputFile() {
