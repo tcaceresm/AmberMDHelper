@@ -28,42 +28,40 @@ EOF
 
 function Help() {
   ScriptInfo
-  echo -e "\nUsage: bash process_MD.sh OPTIONS\n"
-  echo "This script process molecular dynamics simulations in the specified directory previously configured with setup_MD.sh."
-  echo "This include:"
-  echo " - Remove solvent from trajectories."
-  echo " - RMSD and RMSF data generation."
-  echo " - Temperature, Density and Total energy data generation."
-  echo " - Intermolecular H-bond."
-  echo -e "\nThe specified directory must always have a folder named  \"receptor\" containing the receptor PDB 
-and an optional \"ligands\" and \"cofactor\" folder containing MOL2 file of ligands and cofactor, respectively.\n"
+  cat <<EOF
 
-  echo "Required options:"
-  echo " -d, --work_dir     <DIR>       Working directory. Inside this directory, a folder named setupMD should exist, containing all output files."
-  echo "Optional:"
-  echo " -h, --help                      Show this help."
-  echo " --prot_only        <0|1>          (default=0) Process only-protein MD."
-  echo " --prot_lig         <0|1>          (default=0) Process protein-ligand MD."
-  echo " --equi             <0|1>          (default=1) Process equilibration phase."
-  echo " --prod             <0|1>          (default=1) Process production phase."
-  echo " --rmsd             <0|1>          (default=1) Calculate RMSD and RMSF (whole dry system). Must have dry trajectories. see --dry option."
-  echo " --rmsd_mask        <AMBER_MASK>   (default=":1-TOTALRES@CA,C,N"). Mask used to calculate RMSD and RMSF. (TOTALRES is the N° of residues and
-                                   it's automatically determined)."
-  echo " --dry              <0|1>          (default=1) Remove water and ions from trajectories."
-  echo " --thermo           <0|1>          (default=1) Generate Temperature, Density and Total Energy data from trajectories. These are obtained from .out files."
-  echo " --mmpbsa_rescore   <0|1>          (default=0) Obtain unsolvated minimized structure (from min2.rst7 file of equilibration phase). Must run this option if you want to
-                                   perform MM/PBSA rescoring using MMPBSA.sh script."
-  echo " --hbond            <0|1>          (default=0) Compute intermolecular h-bonds (protein-ligand mode only)."
-  echo " -n, --replicas     <integer>      (default=3) Number of replicas or repetitions to process."
-  echo " --start_replica    <integer>      (default=1) Process from --start_replica to --replicas."
+Usage: bash process_MD.sh OPTIONS
+
+This script process molecular dynamics simulations in the specified directory previously configured with setup_MD.sh.
+This include:
+ - Remove solvent from trajectories.
+ - RMSD and RMSF data generation.
+ - Temperature, Density and Total energy data generation.
+ - Intermolecular H-bond.
+
+The specified directory must always have a folder named "receptor" containing the receptor PDB
+and an optional "ligands" and "cofactor" folder containing MOL2 file of ligands and cofactor, respectively.
+
+Required options:
+ -d, --work_dir     <DIR>       Working directory. Inside this directory, a folder named setupMD should exist, containing all output files.
+Optional:
+ -h, --help                      Show this help.
+ --prot_only        <0|1>          (default=0) Process only-protein MD.
+ --prot_lig         <0|1>          (default=0) Process protein-ligand MD.
+ --equi             <0|1>          (default=1) Process equilibration phase.
+ --prod             <0|1>          (default=1) Process production phase.
+ --rmsd             <0|1>          (default=1) Calculate RMSD and RMSF (whole dry system). Must have dry trajectories. see --dry option.
+ --rmsd_mask        <AMBER_MASK>   (default=":1-TOTALRES@CA,C,N"). Mask used to calculate RMSD and RMSF. (TOTALRES is the N° of residues and
+                                   it's automatically determined).
+ --dry              <0|1>          (default=1) Remove water and ions from trajectories.
+ --thermo           <0|1>          (default=1) Generate Temperature, Density and Total Energy data from trajectories. These are obtained from .out files.
+ --mmpbsa_rescore   <0|1>          (default=0) Obtain unsolvated minimized structure (from min2.rst7 file of equilibration phase). Must run this option if you want to
+                                   perform MM/PBSA rescoring using MMPBSA.sh script.
+ --hbond            <0|1>          (default=0) Compute intermolecular h-bonds (protein-ligand mode only).
+ -n, --replicas     <integer>      (default=3) Number of replicas or repetitions to process.
+ --start_replica    <integer>      (default=1) Process from --start_replica to --replicas.
+EOF
 }
-
-# Check arguments
-if [[ "$#" == 0 ]]; then
-  echo "Error: No options provided."
-  echo "Use --help option to check available options."
-  exit 1
-fi
 
 # Default values
 PROCESS_PROT_ONLY=0
@@ -78,6 +76,12 @@ REPLICAS=3
 START_REPLICA=1
 ENSEMBLE="npt"
 
+# Check arguments
+if [[ "$#" == 0 ]]; then
+  echo "Error: No options provided."
+  echo "Use --help option to check available options."
+  exit 1
+fi
 
 # CLI option parser
 
