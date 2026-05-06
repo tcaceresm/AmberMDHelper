@@ -360,6 +360,10 @@ function PrepareReceptor() {
   
   CheckProgram "pdb4amber"
   log " Running pdb4amber on ${rec_name}.pdb"
+  log "  pdb4amber -i ${prep_pdb_path}/${rec_name}_raw.pdb 
+                   -o ${prep_pdb_file} 
+                   -l ${prep_pdb_path}/prepare_receptor.log"
+
   pdb4amber -i ${prep_pdb_path}/${rec_name}_raw.pdb \
   -o ${prep_pdb_file} -l ${prep_pdb_path}/prepare_receptor.log
 
@@ -399,19 +403,38 @@ function PrepareSmallMolecule() {
   NetCharge ${lig_lib_dir} ${lig_name}
 
   if [[ ${COMPUTE_CHARGES} -eq 1 ]]; then
-    log " Running antechamber with charge method: ${CHARGE_METHOD}"
+    log " Running antechamber"
+    log " antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2
+                      -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2
+                      -c "${CHARGE_METHOD}" -nc "${LIGAND_NET_CHARGE}"
+                      -at ${LIG_FF} -rn "${mode}" -pf y"
+    
     antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
-    -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 -c "${CHARGE_METHOD}" \
-    -nc "${LIGAND_NET_CHARGE}" -at ${LIG_FF} -rn "${mode}" -pf y
+                -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 \
+                -c "${CHARGE_METHOD}" -nc "${LIGAND_NET_CHARGE}" \
+                -at ${LIG_FF} -rn "${mode}" -pf y
   else
     log " Running antechamber (no charge calculation)"
+    log " antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2
+                      -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2
+                      -at ${LIG_FF} -rn "${mode}" -pf y"
     antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
-    -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 -at ${LIG_FF} -rn "${mode}" -pf y
+                -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 \
+                -at ${LIG_FF} -rn "${mode}" -pf y
   fi
 
-  antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 -o "${lig_lib_dir}/${lig_name}_lig.pdb" \
-                                -fo pdb -dr n -at ${LIG_FF} -rn "${mode}"
-  parmchk2 -i "${lig_lib_dir}/${lig_name}.mol2" -f mol2 -o "${lig_lib_dir}/${lig_name}.frcmod"
+  log " antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2
+                    -o "${lig_lib_dir}/${lig_name}_lig.pdb" -fo pdb 
+                    -dr n -at ${LIG_FF} -rn "${mode}""
+  antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
+              -o "${lig_lib_dir}/${lig_name}_lig.pdb" -fo pdb \
+              -dr n -at ${LIG_FF} -rn "${mode}"
+
+  log " running parmchk2 to obtain frcmod"
+  log " parmchk2 -i "${lig_lib_dir}/${lig_name}.mol2" -f mol2 
+                 -o "${lig_lib_dir}/${lig_name}.frcmod" "
+  parmchk2 -i "${lig_lib_dir}/${lig_name}.mol2" -f mol2 \
+           -o "${lig_lib_dir}/${lig_name}.frcmod"
 
   log " Running tleap to generate ${lig_name}.lib"
   cat > ${lig_lib_dir}/leap_lib.in <<EOF
@@ -510,7 +533,7 @@ function PrepareTopology() {
   CheckProgram "tleap"
 
   log "======================================"
-  log "Preparing topologies (mode=${MODE}, target=${TARGET})"
+  log "Preparing topologies (mode=${MODE}    "
   log "======================================"
   
   cd ${TOPO_DIR}
@@ -877,7 +900,7 @@ function ParseProtocol() {
         createMdInput "$step_name" "${expanded_args[@]}"
         ;;
       *)
-        echo "Error: unrecognized protocol keyword: '$keyword'" >&2
+        log "Error: unrecognized protocol keyword: '$keyword'" >&2
         exit 1
         ;;
     esac
@@ -933,7 +956,22 @@ function ProtocolMD() {
 }
 
 function log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${MAIN_LOG}"
+  local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
+  local first_line=1
+  local padding=""
+  echo "$*" | while IFS= read -r line; do
+    # Strip leading whitespace
+    line="${line#"${line%%[![:space:]]*}"}"
+    if [[ ${first_line} -eq 1 ]]; then
+      echo "${timestamp} ${line}"
+      local prefix="${timestamp} "
+      local before_flag="${line%%-*}"
+      padding="${prefix//?/ }${before_flag//?/ }"
+      first_line=0
+    else
+      echo "${padding}${line}"
+    fi
+  done | tee -a "${MAIN_LOG}"
 }
 
 ############################################################
@@ -957,16 +995,18 @@ CheckUniqueFile ${WDDIR}/receptor/
 RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 
 # Determinar MODE según flags activos
+# Además, especificar directorio del LOG
 if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
   MODE="prot_only"
+  LOG_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD"
 elif [[ ${PROT_LIG_MD} -eq 1 ]]; then
   MODE="prot_lig"
+  LOG_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD"
 else
   MODE="default"
 fi
 
 # Logging se inicializa aquí porque necesita WDDIR, RECEPTOR_NAME y MODE
-LOG_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/${MODE}"
 mkdir -p "${LOG_DIR}"
 MAIN_LOG="${LOG_DIR}/main.log"
 
@@ -975,7 +1015,7 @@ log "Starting setup_MD"
 log "Working directory: ${WDDIR}"
 log "Mode: ${MODE}"
 log "Replicas: ${REPLICAS}"
-log "Log directory: ${LOG_DIR}"
+log "Log file: ${MAIN_LOG}"
 log "Receptor: ${RECEPTOR_NAME}"
 
 ###### Test ######
@@ -1059,7 +1099,7 @@ fi
 ## ====== Create MD files ======
 
 if [[ ${PREP_MD} -eq 1 ]]; then
- 
+
   ParseTime
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
@@ -1080,31 +1120,32 @@ if [[ ${PREP_MD} -eq 1 ]]; then
     
     log "Done creating MD files for prot_only."
   fi
-fi
 
-if [[ ${PROT_LIG_MD} -eq 1 ]]; then
+  if [[ ${PROT_LIG_MD} -eq 1 ]]; then
   
-  LigParser
-  
-  for REP in $(seq 1 ${REPLICAS}); do
-    for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
+    LigParser
+    
+    for REP in $(seq 1 ${REPLICAS}); do
+      for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
 
-      log "Creating MD input files: prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
-      TopologyParser "mode" "prot_lig" "lig" ${LIGAND_NAME}
-      TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
+        log "Creating MD input files: prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
+        TopologyParser "mode" "prot_lig" "lig" ${LIGAND_NAME}
+        TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
 
-      MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
-      EQUI_DIR="${MODE_DIR}/MD/rep${REP}/equi/${ENSEMBLE}"
-      PROD_DIR="${MODE_DIR}/MD/rep${REP}/prod/${ENSEMBLE}"
+        MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
+        EQUI_DIR="${MODE_DIR}/MD/rep${REP}/equi/${ENSEMBLE}"
+        PROD_DIR="${MODE_DIR}/MD/rep${REP}/prod/${ENSEMBLE}"
 
-      if [[ ${PREP_MD} -eq 1 ]]; then
         ProtocolMD ${EQUI_DIR} ${PROD_DIR} ${TOTALRES} ${NSTLIM_EQUI} ${NSTLIM_PROD}
         log "Done creating MD files for prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
-      fi
+      done
     done
-  done
+
+  fi
 
 fi
+
+## ====== End Create MD files ======
 
 ## ====== End Create MD files ======
 log "=========================================="
