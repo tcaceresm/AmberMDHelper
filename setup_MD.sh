@@ -29,16 +29,16 @@ EOF
 Help() {
     ScriptInfo
     cat <<EOF
-
+ 
 Usage: bash setup_MD.sh OPTIONS
-
+ 
 This script sets up molecular dynamics simulations in the specified directory.
 The specified directory must always have a folder named "receptor" containing the receptor PDB
 and an optional "ligands" and "cofactor" folder containing MOL2 file of ligands and cofactor, respectively.
-
+ 
 Required options:
   -d, --work_dir     <path>       Working directory. Inside this directory, a folder named setupMD will be created which contains all necessary files.
-
+ 
 Optional:
   -h, --help                      Show this help.
   --prod_time        <integer>    (default=100) Simulation time (in ns) (2 fs timestep).
@@ -58,9 +58,69 @@ Optional:
   --prot_ff          <string>     (default="ff19SB") Protein forcefield.
   --water_model      <string>     (default="opc") Water model used in MD.
   --box_size         <integer>    (default=14) Size of water box.
+  --protocol         <steps>      Custom MD protocol. Sequence of blocks starting with 'minimization' or 'moldyn',
+                                  followed by a step name and Amber parameters. Use single quotes for masks
+                                  to defer shell expansion of \${TOTALRES}.
+                                  Example: --protocol minimization min1 restraintmask ':1-\${TOTALRES}&!@H=' restraint_wt 25.0 \\
+                                           moldyn md_nvt irest 0 ntx 1 ntb 1 nstlim 25000
+  --amber_options                 Show all Amber parameters available for --protocol blocks and exit.
 EOF
 }
-
+ 
+HelpAmber() {
+  cat <<EOF
+ 
+Amber options available via ParseAmberOptions (used inside --protocol blocks):
+ 
+  Minimization (minimization keyword):
+    ntmin          <integer>   Minimization method (default=1: steepest descent then conjugate gradient).
+    maxcyc         <integer>   Maximum number of minimization cycles (default=10000).
+    ncyc           <integer>   Steepest-descent cycles before switching to conjugate gradient (default=1000).
+    ntpr           <integer>   Print energy every ntpr steps (default=100).
+    cut            <float>     Nonbonded cutoff in Angstroms (default=10.0).
+    ntr            <0|1>       Enable positional restraints (default=1).
+    restraintmask  <string>    Amber mask for restrained atoms. Use single quotes: ':1-\${TOTALRES}&!@H='.
+    restraint_wt   <float>     Restraint force constant in kcal/mol/A^2.
+ 
+  Molecular dynamics (moldyn keyword):
+    irest          <0|1>       Restart MD from a previous run (0=new, 1=restart).
+    ntx            <integer>   Input coordinate reading (1=positions only, 5=positions+velocities).
+    nstlim         <integer>   Number of MD steps (default=25000).
+    dt             <float>     Timestep in ps (default=0.002, i.e. 2 fs).
+    ntc            <integer>   SHAKE bond constraints (1=none, 2=H-bonds, 3=all bonds; also sets ntf).
+    ntb            <0|1|2>     Periodic boundary (0=none, 1=constant volume, 2=constant pressure).
+    cut            <float>     Nonbonded cutoff in Angstroms (default=10.0).
+    nscm           <integer>   Remove center-of-mass motion every nscm steps (default=1000).
+    ntpr           <integer>   Print energy every ntpr steps (default=5000).
+    ntwx           <integer>   Write coordinates every ntwx steps (default=5000).
+    ntwr           <integer>   Write restart file every ntwr steps (default=5000).
+    ntr            <0|1>       Enable positional restraints.
+    restraintmask  <string>    Amber mask for restrained atoms. Use single quotes: ':1-\${TOTALRES}@CA,C,N'.
+    restraint_wt   <float>     Restraint force constant in kcal/mol/A^2.
+ 
+  Thermostat (moldyn):
+    thermo         <string>    Thermostat type: 'langevin' (default) or 'berendsen'.
+    temp0          <float>     Target temperature in K (default=300).
+    tempi          <float>     Initial temperature in K (default=300).
+    gamma_ln       <float>     Langevin collision frequency in ps^-1 (default=5.0).
+    tautp          <float>     Berendsen temperature coupling time in ps (default=1.0).
+ 
+  Barostat (moldyn, requires ntb=2 and ntp=1):
+    ntp            <0|1>       Pressure scaling (0=none, 1=isotropic).
+    baro           <string>    Barostat type: 'montecarlo' (default) or 'berendsen'.
+    taup           <float>     Berendsen pressure relaxation time in ps (default=1.0).
+    mcbarint       <integer>   Monte Carlo barostat attempt frequency (default=100).
+ 
+  Varying conditions (moldyn):
+    varycond       <type> <istep1> <istep2> <value1> <value2>
+                              Ramp a parameter linearly. E.g.: varycond TEMP0 0 20000 100.0 300.0
+ 
+  Other:
+    previousref               Use the previous restart file as reference for restraints.
+ 
+EOF
+}
+ 
 # Default values
 PROD_TIME=100
 EQUI_TIME=10
@@ -78,11 +138,12 @@ CHARGE_METHOD="abcg2"
 MMPBSA=0
 #NTHREADS=1
 ENSEMBLE="npt"
+PROTOCOL_ARGS=()
 LIG_FF="gaff2"
 PROT_FF="ff19SB"
 WATER_MODEL="opc"
 BOX_SIZE=14
-
+ 
 # CLI option parser
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -105,11 +166,20 @@ while [[ $# -gt 0 ]]; do
   '--prot_ff'                ) shift ; PROT_FF=$1 ;;
   '--water_model'            ) shift ; WATER_MODEL=$1 ;;
   '--box_size'               ) shift ; BOX_SIZE=$1 ;;
+  '--protocol'               ) shift
+                               PROTOCOL_ARGS=()
+                               while [[ $# -gt 0 && "$1" != --* && "$1" != -* ]]; do
+                                 PROTOCOL_ARGS+=("$1")
+                                 shift
+                               done
+                               continue ;;
   '--help' | '-h'            ) Help ; exit 0 ;;
+  '--amber_options'          ) HelpAmber ; exit 0 ;;
   *                          ) echo "Unrecognized command line option: $1" >> /dev/stderr ; exit 1 ;;
   esac
   shift
 done
+
 
 function CheckVariable() {
   # Check if variable is empty or not defined.
@@ -767,6 +837,53 @@ function ParseTime() {
   NSTLIM_EQUI=$(awk "BEGIN {printf \"%d\", 500000 * $EQUI_TIME}")
 }
 
+function ParseProtocol() {
+  # Parse a custom protocol defined via --protocol.
+  # Tokens are interpreted sequentially. Each block starts with:
+  #   'minimization' <step_name> [amber_options...]  --> calls CreateMinInput
+  #   'moldyn'       <step_name> [amber_options...]  --> calls createMdInput
+  # Amber mask arguments containing ${TOTALRES} must be passed with single quotes
+  # from the CLI to defer expansion. They are eval-expanded here, after TOTALRES
+  # is already set by TotalResWrapper.
+  local args=("$@")
+  local i=0
+
+  while [[ $i -lt ${#args[@]} ]]; do
+    local keyword="${args[$i]}"
+    (( i++ ))
+
+    # Collect step name and all tokens until the next block keyword
+    local step_name="${args[$i]}"
+    (( i++ ))
+    local step_args=()
+    while [[ $i -lt ${#args[@]} && \
+             "${args[$i]}" != "minimization" && \
+             "${args[$i]}" != "moldyn" ]]; do
+      step_args+=("${args[$i]}")
+      (( i++ ))
+    done
+
+    # Expand deferred variables (e.g. ${TOTALRES}) in each argument
+    local expanded_args=()
+    for arg in "${step_args[@]}"; do
+      expanded_args+=("$(eval echo \"$arg\")")
+    done
+
+    case "$keyword" in
+      'minimization')
+        CreateMinInput "$step_name" "${expanded_args[@]}"
+        ;;
+      'moldyn')
+        createMdInput "$step_name" "${expanded_args[@]}"
+        ;;
+      *)
+        echo "Error: unrecognized protocol keyword: '$keyword'" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
 function ProtocolMD() {
     # Protocol:
   #   You can adapt this protocol.
@@ -782,29 +899,36 @@ function ProtocolMD() {
   PROD_TIME=$5
   # Equi
   cd ${EQUI_DIR}
-  CreateMinInput min1 restraintmask ":1-${TOTALRES}&!@H=" restraint_wt 25.0
-  CreateMinInput min2 restraintmask ":1-${TOTALRES}&!@H=" restraint_wt 5.0
 
-  createMdInput md_nvt_ntr irest 0 ntx 1 ntb 1 nstlim 25000 \
-                ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 5.0 \
-                varycond 'TEMP0' 0 20000 100.0 300.0 \
-                tempi 100
+  if [[ ${#PROTOCOL_ARGS[@]} -gt 0 ]]; then
+    # Custom protocol defined via --protocol CLI flag
+    ParseProtocol "${PROTOCOL_ARGS[@]}"
+  else
+    # Default protocol
+    CreateMinInput min1 restraintmask ":1-${TOTALRES}&!@H=" restraint_wt 25.0
+    CreateMinInput min2 restraintmask ":1-${TOTALRES}&!@H=" restraint_wt 5.0
 
-  createMdInput npt_equil_1 irest 1 ntx 5 ntp 1 ntb 2 nstlim 50000 \
-                ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 5.0
-  createMdInput npt_equil_2 ntp 1 ntb 2 nstlim 25000 \
-                ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 4.0
-  createMdInput npt_equil_3 ntp 1 ntb 2 nstlim 25000 \
-                ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 3.0
-  createMdInput npt_equil_4 ntp 1 ntb 2 nstlim 25000 \
-                ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 2.0
-  createMdInput npt_equil_5 ntp 1 ntb 2 nstlim 25000 \
-                ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 1.0
-  createMdInput npt_equil_6 ntp 1 ntb 2 nstlim ${EQUI_TIME}
+    createMdInput md_nvt_ntr irest 0 ntx 1 ntb 1 nstlim 25000 \
+                  ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 5.0 \
+                  varycond 'TEMP0' 0 20000 100.0 300.0 \
+                  tempi 100
 
-  # Prod NPT
-  cd ${PROD_DIR}
-  createMdInput md_prod ntp 1 ntb 2 nstlim ${PROD_TIME}
+    createMdInput npt_equil_1 irest 1 ntx 5 ntp 1 ntb 2 nstlim 50000 \
+                  ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 5.0
+    createMdInput npt_equil_2 ntp 1 ntb 2 nstlim 25000 \
+                  ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 4.0
+    createMdInput npt_equil_3 ntp 1 ntb 2 nstlim 25000 \
+                  ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 3.0
+    createMdInput npt_equil_4 ntp 1 ntb 2 nstlim 25000 \
+                  ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 2.0
+    createMdInput npt_equil_5 ntp 1 ntb 2 nstlim 25000 \
+                  ntr 1 restraintmask ":1-${TOTALRES}@CA,C,N" restraint_wt 1.0
+    createMdInput npt_equil_6 ntp 1 ntb 2 nstlim ${EQUI_TIME}
+
+    # Prod NPT
+    cd ${PROD_DIR}
+    createMdInput md_prod ntp 1 ntb 2 nstlim ${PROD_TIME}
+  fi
 
 }
 
@@ -828,19 +952,30 @@ SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Path of the working directory which contains receptor, ligand (optional) and cofactor (optional) folders
 WDDIR=$(realpath "$WDDIR")
 
-# Logging se inicializa aquí porque necesita WDDIR resuelto
-LOG_DIR="${WDDIR}/setupMD/logs/$(date '+%Y-%m-%d_%H-%M-%S')"
+# Resolver RECEPTOR_NAME antes de inicializar el log
+CheckUniqueFile ${WDDIR}/receptor/
+RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
+
+# Determinar MODE según flags activos
+if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
+  MODE="prot_only"
+elif [[ ${PROT_LIG_MD} -eq 1 ]]; then
+  MODE="prot_lig"
+else
+  MODE="default"
+fi
+
+# Logging se inicializa aquí porque necesita WDDIR, RECEPTOR_NAME y MODE
+LOG_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/${MODE}"
 mkdir -p "${LOG_DIR}"
 MAIN_LOG="${LOG_DIR}/main.log"
 
 log "=========================================="
 log "Starting setup_MD"
 log "Working directory: ${WDDIR}"
+log "Mode: ${MODE}"
 log "Replicas: ${REPLICAS}"
 log "Log directory: ${LOG_DIR}"
-
-CheckUniqueFile ${WDDIR}/receptor/
-RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 log "Receptor: ${RECEPTOR_NAME}"
 
 ###### Test ######
