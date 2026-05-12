@@ -533,7 +533,7 @@ function PrepareTopology() {
   CheckProgram "tleap"
 
   log "======================================"
-  log "Preparing topologies (mode=${MODE}    "
+  log "Preparing topologies (mode=${MODE})   "
   log "======================================"
   
   cd ${TOPO_DIR}
@@ -612,6 +612,8 @@ quit
 EOF
 
   log " Running tleap for topology: ${TOPO_NAME}"
+  log "  Directory: $(realpath .)" 
+  log "  File: tleap.in"
   tleap -f ./tleap.in || { log "ERROR: tleap failed during ${tleap_input}"; exit 1; }
   log " Done preparing topology: ${TOPO_NAME}"
   cd ${WDDIR}
