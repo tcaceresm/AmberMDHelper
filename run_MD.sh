@@ -63,6 +63,13 @@ ENSEMBLE="npt"
 MMPBSA=0
 MD_PROG="pmemd.cuda"
 
+# Check arguments
+if [[ "$#" == 0 ]]; then
+  echo "Error: No options provided."
+  echo "Use --help option to check available options."
+  exit 1
+fi
+
 # CLI option parser
 while [[ $# -gt 0 ]]; do
   case "$1" in
