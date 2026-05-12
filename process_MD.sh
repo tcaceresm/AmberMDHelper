@@ -177,6 +177,7 @@ function TotalResWrapper() {
 }
 
 function RemoveWat() {
+  # Remove Water and ions molecules (hardcoded)
   local dir=$1
   shift
   local traj=($(echo "$@" | tr ' ' '\n' | sort -V))
@@ -191,7 +192,8 @@ trajin ${trajectory}
 EOF
   done
 cat >> ${dir}/remove_hoh.in <<EOF
-strip :WAT,Na+,K+,Cl-
+strip :Na+,K+,Cl-
+strip !(:1-${TOTALRES})
 autoimage :1-${TOTALRES}
 trajout ./noWAT_traj.nc
 EOF
