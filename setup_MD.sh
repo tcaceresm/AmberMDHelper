@@ -1010,7 +1010,7 @@ fi
 
 # Logging se inicializa aquí porque necesita WDDIR, RECEPTOR_NAME y MODE
 mkdir -p "${LOG_DIR}"
-MAIN_LOG="${LOG_DIR}/main.log"
+MAIN_LOG="${LOG_DIR}/setup_MD.log"
 
 log "=========================================="
 log "Starting setup_MD"
