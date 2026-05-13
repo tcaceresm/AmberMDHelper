@@ -266,7 +266,7 @@ WDDIR=$(realpath "$WDDIR")
 # Logging
 LOG_DIR="${WDDIR}/logs/runMD/$(date '+%Y-%m-%d_%H-%M-%S')"
 mkdir -p "${LOG_DIR}"
-MAIN_LOG="${LOG_DIR}/main.log"
+MAIN_LOG="${LOG_DIR}/run_MD.log"
 
 log "=========================================="
 log "Starting run_MD"
