@@ -233,6 +233,15 @@ function RunMMPBSA() {
     CheckProgram ${EXE}
   fi
 
+  log "${EXE} -O -i ${input_file}
+            -o mmpbsa_results.data
+            -eo per_frame_mmpbsa_results.data
+            -do decomp_mmpbsa_results.data
+            -deo per_frame_decomp_mmpbsa_results.data
+            -cp ${com_topo}
+            -rp ${rec_topo}
+            -lp ${lig_topo}
+            -y ${traj}"
   # Run MMPBSA
   ${EXE} -O -i ${input_file} \
             -o mmpbsa_results.data \
@@ -290,6 +299,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       ParseDirectory "rescore" ${LIG_NAME} ${REP}
 
       cd ${MMPBSA_DIR}
+      log "Current working directory: ${MMPBSA_DIR}"
 
       ParseFiles "rescore" ${LIG_NAME} ${REP}
       CreateInputFile ${MMPBSA_DIR}
@@ -307,7 +317,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       ParseDirectory "equi" ${LIG_NAME} ${REP}
 
       cd ${MMPBSA_DIR}
-
+      log "Current working directory: ${MMPBSA_DIR}"
       ParseFiles "equi" ${LIG_NAME} ${REP}
       CreateInputFile ${MMPBSA_DIR}
     
@@ -324,6 +334,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       ParseDirectory "prod" ${LIG_NAME} ${REP}
 
       cd ${MMPBSA_DIR}
+      log "Current working directory: ${MMPBSA_DIR}"
 
       ParseFiles "prod" ${LIG_NAME} ${REP}
       CreateInputFile ${MMPBSA_DIR}
