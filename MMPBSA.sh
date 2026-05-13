@@ -119,6 +119,25 @@ function CheckFiles() {
   done
 }
 
+function log() {
+  local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
+  local first_line=1
+  local padding=""
+  echo "$*" | while IFS= read -r line; do
+    # Strip leading whitespace
+    line="${line#"${line%%[![:space:]]*}"}"
+    if [[ ${first_line} -eq 1 ]]; then
+      echo "${timestamp} ${line}"
+      local prefix="${timestamp} "
+      local before_flag="${line%%-*}"
+      padding="${prefix//?/ }${before_flag//?/ }"
+      first_line=0
+    else
+      echo "${padding}${line}"
+    fi
+  done | tee -a "${MAIN_LOG}"
+}
+
 function ParseDirectory() {
   local mode=$1
   local lig=$2
@@ -235,6 +254,20 @@ WDDIR=$(realpath "$WDDIR")
 
 RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 
+# Logging: un único log por receptor, cubre todos los ligandos y repeticiones
+LOG_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD"
+mkdir -p "${LOG_DIR}"
+MAIN_LOG="${LOG_DIR}/mmpbsa.log"
+
+log "=========================================="
+log "Starting MMPBSA"
+log "Working directory: ${WDDIR}"
+log "Receptor: ${RECEPTOR_NAME}"
+log "Replicas: ${START_REPLICA} to ${REPLICAS}"
+log "Run equi: ${RUN_EQUI} | Run prod: ${RUN_PROD} | Run rescore: ${RUN_RESCORE}"
+log "Log file: ${MAIN_LOG}"
+log "=========================================="
+
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
   LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
@@ -248,11 +281,12 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
     # Required for both MD and MMPBSA
     LIG_NAME=$(basename ${LIG_NAME} .mol2)
-    echo "Doing ligand: ${LIG_NAME}"
-    echo "Rep. number: ${REP}"
+    log "=========================================="
+    log "Ligand: ${LIG_NAME} | Rep: ${REP}"
+    log "=========================================="
 
     if [[ ${RUN_RESCORE} -eq 1 ]]; then
-      echo "Doing MMPBSA rescoring"
+      log "Doing MMPBSA rescoring | ligand: ${LIG_NAME} | rep: ${REP}"
       ParseDirectory "rescore" ${LIG_NAME} ${REP}
 
       cd ${MMPBSA_DIR}
@@ -265,11 +299,11 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
                 ${VAC_LIG_TOPO}
     
       cd ${WDDIR}
-      echo "Done"
+      log "Done rescore | ligand: ${LIG_NAME} | rep: ${REP}"
     fi
 
     if [[ ${RUN_EQUI} -eq 1 ]]; then
-      echo "Doing equi MMPBSA"
+      log "Doing equi MMPBSA | ligand: ${LIG_NAME} | rep: ${REP}"
       ParseDirectory "equi" ${LIG_NAME} ${REP}
 
       cd ${MMPBSA_DIR}
@@ -282,11 +316,11 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
                 ${VAC_LIG_TOPO}
     
       cd ${WDDIR}
-      echo "Done"
+      log "Done equi | ligand: ${LIG_NAME} | rep: ${REP}"
     fi
 
     if [[ ${RUN_PROD} -eq 1 ]]; then
-      echo "Doing prod MMPBSA"
+      log "Doing prod MMPBSA | ligand: ${LIG_NAME} | rep: ${REP}"
       ParseDirectory "prod" ${LIG_NAME} ${REP}
 
       cd ${MMPBSA_DIR}
@@ -299,8 +333,12 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
                 ${VAC_LIG_TOPO}
     
       cd ${WDDIR}
-      echo "Done"
+      log "Done prod | ligand: ${LIG_NAME} | rep: ${REP}"
     fi
 
   done
 done
+
+log "=========================================="
+log "MMPBSA completed successfully"
+log "=========================================="
