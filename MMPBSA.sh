@@ -102,8 +102,8 @@ done
 function CheckProgram() {
   # Check if command is available
   for COMMAND in "$@"; do
-    if ! command -v ${1} >/dev/null 2>&1; then
-      echo "Error: ${1} program not available, exiting."
+    if ! command -v ${COMMAND} >/dev/null 2>&1; then
+      echo "Error: ${COMMAND} program not available, exiting."
       exit 1
     fi
   done
