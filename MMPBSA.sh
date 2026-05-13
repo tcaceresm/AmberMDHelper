@@ -35,26 +35,30 @@ EOF
 
 Help() {
   ScriptInfo
-  echo -e "\nUsage: bash MMPBSA.sh OPTIONS\n"
-  echo -e "This script perform MM/PB(G)SA calculations."
-  echo -e "It requires a unsolvated topology for complex, receptor and ligand, and a trajectory file.\n"
-  echo "A folder structure and topologies obtained with setup_MD.sh is required."
-  echo "Also, trajectories obtained with run_MD.sh are required."
-  echo
-  echo "Required options:"
-  echo " -d, --work_dir     <DIR>        Working directory. Inside this directory, a folder named setupMD should exist, containing all input files."
-  echo "                                 Also, a ligands and receptor folders are required to parse files."
-  #echo " -x, --trajectory   <file>       Unsolvated trajectory used to compute MM/PBSA calculations. This can be obtained using process_MD.sh"
-  echo "Optional:"
-  echo " -h, --help                      Show this help."
-  echo " --equi             <0|1>        (default=1) Perform MM/PBSA using equilibration phase trajectory (noWAT_traj.nc)"
-  echo " --prod             <0|1>        (default=1) Perform MM/PBSA using production phase trajectory (noWAT_traj.nc)."
-  echo " --rescore          <0|1>        (default=0) Perform MM/PBSA using minimized (2-step energy minimization) structure from equilibration phase."
-  echo " --interval         <integer>    (default=1) The offset from which to choose frames from each trajectory file."
-  echo " -n, --replicas     <integer>    (default=3) Number of replicas or repetitions."
-  echo " --start_replica    <integer>    (default=1) Run from --start_replica to --replicas."
-  echo " --parallel         <0|1>        (default=0) Use MMPBSA.py.MPI to run parallel calculations."
-  echo " --cores            <integer>    (default=4) Number of cores to parallelize, if --parallel is set to 1."
+  cat <<EOF
+
+Usage: bash MMPBSA.sh OPTIONS
+
+This script perform MM/PB(G)SA calculations.
+It requires a unsolvated topology for complex, receptor and ligand, and a trajectory file.
+
+A folder structure and topologies obtained with setup_MD.sh is required.
+Also, trajectories obtained with run_MD.sh are required.
+
+Required options:
+ -d, --work_dir     <DIR>        Working directory. Inside this directory, a folder named setupMD should exist, containing all input files.
+                                 Also, a ligands and receptor folders are required to parse files.
+Optional:
+ -h, --help                      Show this help.
+ --equi             <0|1>        (default=1) Perform MM/PBSA using equilibration phase trajectory (noWAT_traj.nc)
+ --prod             <0|1>        (default=1) Perform MM/PBSA using production phase trajectory (noWAT_traj.nc).
+ --rescore          <0|1>        (default=0) Perform MM/PBSA using minimized (2-step energy minimization) structure from equilibration phase.
+ --interval         <integer>    (default=1) The offset from which to choose frames from each trajectory file.
+ -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
+ --start_replica    <integer>    (default=1) Run from --start_replica to --replicas.
+ --parallel         <0|1>        (default=0) Use MMPBSA.py.MPI to run parallel calculations.
+ --cores            <integer>    (default=4) Number of cores to parallelize, if --parallel is set to 1.
+EOF
 }
 
 # Check arguments
