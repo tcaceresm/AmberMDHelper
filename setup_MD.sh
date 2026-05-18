@@ -675,6 +675,7 @@ function CreateMinInput() {
 
   IMIN=1
   NTPR=100
+  NTMIN=1
 
   NTF=1
   CUT=10.0
@@ -693,13 +694,13 @@ function CreateMinInput() {
 Initial minimization w/ position restraints
 &cntrl
   ! General flags describing the calculation
-  imin = 1,   
+  imin = ${IMIN},   
   ! Nature and format of the output
   ntpr = ${NTPR},
   ! Potential function parameters
   cut = ${CUT}, nsnb = ${NSNB}, ntf = ${NTF},
   ! Energy minimization
-  maxcyc = ${MAXCYC}, ncyc = ${NCYC}, ntmin = 1,
+  maxcyc = ${MAXCYC}, ncyc = ${NCYC}, ntmin = ${NTMIN},
 EOF
   if [[ ${NTR} -eq 1 ]]; then
     RestraintWrapper ${INPUT}
