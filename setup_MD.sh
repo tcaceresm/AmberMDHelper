@@ -490,17 +490,17 @@ function TopologyParser() {
   #   Com otherwise
   # These directories are relatives to TOPO_DIR folder.
     
-  MODE=$1
-  LIG=$2
+  #MODE=$1
+  LIG=$1
 
   # Validations
   if [[ ${MODE} != "prot_only" && ${MODE} != "prot_lig" ]]; then
     log "Error: TopologyParser -- invalid mode '${MODE}'. Use prot_only or prot_lig"
     exit 1
-  elif [[ ${MODE} == "prot_only" && $# -gt 1 ]]; then
+  elif [[ ${MODE} == "prot_only" && $# -gt 0 ]]; then
     log "Error: TopologyParser -- prot_only does not accept additional arguments"
     exit 1
-  elif [[ ${MODE} == "prot_lig" && $# -ne 2 ]]; then
+  elif [[ ${MODE} == "prot_lig" && $# -ne 1 ]]; then
     log "Error: TopologyParser -- prot_lig requires exactly one ligand argument"
     exit 1
   fi
@@ -1116,13 +1116,15 @@ if [[ ${PREP_TOPO} -eq 1 ]]; then
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
     log "Creating topology: prot_only"
-    TopologyParser "prot_only"
+    #TopologyParser "prot_only"
+    TopologyParser
     PrepareTopology
   fi
 
   if [[ ${PROT_LIG_MD} -eq 1 ]]; then
     for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
-      TopologyParser "prot_lig" ${LIGAND_NAME}
+      #TopologyParser "prot_lig" ${LIGAND_NAME}
+      TopologyParser ${LIGAND_NAME}
       PrepareTopology 
     done
   fi
@@ -1163,7 +1165,7 @@ if [[ ${PREP_MD} -eq 1 ]]; then
       for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
         log "=========================================="
         log "Creating MD input files: prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
-        TopologyParser "prot_lig" ${LIGAND_NAME}
+        TopologyParser ${LIGAND_NAME}
         TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
 
         MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
