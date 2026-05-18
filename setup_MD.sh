@@ -207,7 +207,7 @@ function CheckFiles() {
   # Check existence of files
   for ARG in "$@"; do
     if [[ ! -f ${ARG} ]]; then
-      echo "Error: ${ARG} file doesn't exist."
+      log "Error: ${ARG} file doesn't exist."
       exit 1
     fi
   done
@@ -482,44 +482,46 @@ function CombineWrapper() {
 
 }
 
-function ParseTopologyOptions() {
-  while [[ $# -gt 0 ]] ; do
-    case "$1" in
-      'mode'             ) shift ; MODE=$1 ;;
-      'lig'              ) shift ; LIG=$1 ;;
-      #'include_cof'      ) shift ; CONTAIN_COFACTOR=1 ;;
-      *                  ) echo "Unrecognized option: $1" >> /dev/stderr ; exit 1 ;;
-    esac
-    shift
-  done
-}
+
 function TopologyParser() {
   # Parse relevant variables
   # Target is com or rec:
   #   Rec when prot_only without cof
   #   Com otherwise
   # These directories are relatives to TOPO_DIR folder.
+    
+  MODE=$1
+  LIG=$2
 
-  ParseTopologyOptions "$@"
+  # Validations
+  if [[ ${MODE} != "prot_only" && ${MODE} != "prot_lig" ]]; then
+    log "Error: TopologyParser -- invalid mode '${MODE}'. Use prot_only or prot_lig"
+    exit 1
+  elif [[ ${MODE} == "prot_only" && $# -gt 1 ]]; then
+    log "Error: TopologyParser -- prot_only does not accept additional arguments"
+    exit 1
+  elif [[ ${MODE} == "prot_lig" && $# -ne 2 ]]; then
+    log "Error: TopologyParser -- prot_lig requires exactly one ligand argument"
+    exit 1
+  fi
 
   if [[ ${MODE} == "prot_only" ]]; then
     TOPO_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/topo"
     PREP_PDB_DIR="../../receptor"
-    TOPO_NAME=${RECEPTOR_NAME} #
+    TOPO_NAME=${RECEPTOR_NAME}
     if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
-      COF_LIB_DIR="../../cofactor_lib/${COFACTOR_NAME}" 
+      COF_LIB_DIR="../../cofactor_lib/${COFACTOR_NAME}"
     fi
-
   elif [[ ${MODE} == "prot_lig" ]]; then
     TOPO_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIG}/topo"
     PREP_PDB_DIR="../../../receptor"
     LIG_LIB_DIR="../lib"
-    TOPO_NAME=${LIG} #
+    TOPO_NAME=${LIG}
     if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
       COF_LIB_DIR="../../../cofactor_lib/${COFACTOR_NAME}"
     fi
   fi
-  
+
   if [[ ${MODE} == "prot_only" && ! ${INCLUDE_COFACTOR} -eq 1 ]]; then
     TARGET="rec"
   else
@@ -547,6 +549,11 @@ source leaprc.${LIG_FF}
 EOF
   # Add cofactor
   if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
+  log "Checking if cofactor parameters file exists."
+  CheckFiles ${COF_LIB_DIR}/${COFACTOR_NAME}.lib \
+             ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod \
+             ${COF_LIB_DIR}/${COFACTOR_NAME}_lig.pdb
+
   cat <<EOF >> ${tleap_input}
 
 loadoff ${COF_LIB_DIR}/${COFACTOR_NAME}.lib
@@ -559,7 +566,8 @@ EOF
 
   # Add ligand
   if [[ ! -z "${LIG}" ]]; then
-    CheckFiles "${LIG_LIB_DIR}/${LIG}.lib" "${LIG_LIB_DIR}/${LIG}.frcmod" \
+    CheckFiles "${LIG_LIB_DIR}/${LIG}.lib" \
+               "${LIG_LIB_DIR}/${LIG}.frcmod" \
                "${LIG_LIB_DIR}/${LIG}_lig.pdb"
     cat <<EOF >> ${tleap_input}
 
@@ -880,6 +888,7 @@ function ParseProtocol() {
     # Collect step name and all tokens until the next block keyword
     local step_name="${args[$i]}"
     (( i++ ))
+    
     local step_args=()
     while [[ $i -lt ${#args[@]} && \
              "${args[$i]}" != "minimization" && \
@@ -887,6 +896,8 @@ function ParseProtocol() {
       step_args+=("${args[$i]}")
       (( i++ ))
     done
+
+    log "Custom Protocol step: [${keyword}] '${step_name} ${step_args[*]}'"
 
     # Expand deferred variables (e.g. ${TOTALRES}) in each argument
     local expanded_args=()
@@ -1092,7 +1103,7 @@ if [[ ${PREP_COFACTOR} -eq 1 ]]; then
   if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
     PrepareSmallMolecule "COF" ${COFACTOR_PATH} ${COFACTOR_NAME} ${COFACTOR_LIB_DIR}
   else
-    log "ERROR: If you want to prepare cofactor, set --include_cof 1."
+    log "Error: If you want to prepare cofactor, set --include_cof 1."
     exit 1
   fi
 fi
@@ -1104,13 +1115,13 @@ if [[ ${PREP_TOPO} -eq 1 ]]; then
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
     log "Creating topology: prot_only"
-    TopologyParser "mode" "prot_only"
+    TopologyParser "prot_only"
     PrepareTopology
   fi
 
   if [[ ${PROT_LIG_MD} -eq 1 ]]; then
     for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
-      TopologyParser  "mode" "prot_lig" "lig" ${LIGAND_NAME}
+      TopologyParser "prot_lig" ${LIGAND_NAME}
       PrepareTopology 
     done
   fi
@@ -1125,9 +1136,9 @@ if [[ ${PREP_MD} -eq 1 ]]; then
   ParseTime
 
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
-
+    log "=========================================="
     log "Creating MD input files: prot_only"
-    TopologyParser mode "prot_only"
+    TopologyParser "prot_only"
     TotalResWrapper ${TOPO_DIR}/${RECEPTOR_NAME}_vac_${TARGET}.parm7
 
     MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD"
@@ -1149,9 +1160,9 @@ if [[ ${PREP_MD} -eq 1 ]]; then
     
     for REP in $(seq 1 ${REPLICAS}); do
       for LIGAND_NAME in ${LIGANDS_NAME[@]}; do
-
+        log "=========================================="
         log "Creating MD input files: prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
-        TopologyParser "mode" "prot_lig" "lig" ${LIGAND_NAME}
+        TopologyParser "prot_lig" ${LIGAND_NAME}
         TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
 
         MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
