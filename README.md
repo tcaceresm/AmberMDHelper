@@ -17,7 +17,7 @@ setup_MD.sh script configures conventional molecular dynamics simulations:
 Ligand and cofactor are optional.
 ### Requirements
 A working directory containing:
- - ```receptor``` folder: This folder must contain a single PDB file of the receptor.
+ - ```receptor``` folder: This folder must contain a single PDB file of the receptor (must be protonated).
  - ```ligands``` folder (optional): This folder must contain ligands files in mol2 format. Ligand must be already protonated.
  - ```cofactor``` folder (optional): This folder should contain a single cofactor file in mol2 format. Cofactor must be already protonated.
 ### Usage
@@ -27,27 +27,50 @@ bash setup_MD.sh --help # get help.
 ```
 Output:
 ```
+###################################################
+ Welcome to SetupMD version 1.2.1 2025   
+  Author: Tomás Cáceres <caceres.tomas@uc.cl>    
+  Laboratory of Molecular Design <http://schuellerlab.org/>
+  Laboratory of Computational simulation & drug design        
+  GitHub <https://github.com/tcaceresm/AmberMDHelper>                             
+  Powered by high fat food and procrastination   
+###################################################
+ 
+Usage: bash setup_MD.sh OPTIONS
+ 
+This script sets up molecular dynamics simulations in the specified directory.
+The specified directory must always have a folder named "receptor" containing the receptor PDB
+and an optional "ligands" and "cofactor" folder containing MOL2 file of ligands and cofactor, respectively.
+ 
 Required options:
- -d, --work_dir     <path>       Working directory. Inside this directory, a folder named setupMD will be created which contains all necessary files.
+  -d, --work_dir     <path>       Working directory. Inside this directory, a folder named setupMD will be created which contains all necessary files.
+ 
 Optional:
- -h, --help                      Show this help.
- --prod_time        <integer>    (default=100) Simulation time (in ns) (2 fs timestep).
- --equi_time        <integer>    (default=10) Simulation time (in ns) of last step of equilibration (2 fs timestep)
- -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
- --prot_only        <0|1>        (default=0) Setup only protein MD.
- --prot_lig         <0|1>        (default=0) Setup protein-ligand MD.
- --prep_rec         <0|1>        (default=1) Prepare receptor. Receptor MUST be already protonated.
- --prep_lig         <0|1>        (default=0) Prepare ligand. Ligand MUST be already protonated.
- --include_cof      <0|1>        (default=0) Include cofactor.
- --prep_cof         <0|1>        (default=0) Prepare cofactor if --include_cof 1. Cofactor MUST be already protonated.
- --prep_topology    <0|1>        (default=0) Prepare topology files.
- --prep_MD          <0|1>        (default=1) Prepare MD input files.
- --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1.
- --charge_method    <string>     (default=abcg2) Charge method if --calc_lig_charge 1.
- --lig_ff           <gaff|gaff2> (default=gaff2) Small molecule forcefield. This applies both ligand and cofactor.
- --prot_ff          <string>     (default=ff19SB) Protein forcefield.
- --water_model      <string>     (default=opc) Water model used in MD.
- --box_size         <integer>    (default=14) Size of water box.
+  -h, --help                      Show this help.
+  --prod_time        <integer>    (default=100) Simulation time (in ns) (2 fs timestep).
+  --equi_time        <integer>    (default=10) Simulation time (in ns) of last step of equilibration (2 fs timestep).
+  -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
+  --prot_only        <0|1>        (default=0) Setup only protein MD.
+  --prot_lig         <0|1>        (default=0) Setup protein-ligand MD.
+  --prep_rec         <0|1>        (default=1) Prepare receptor. Receptor MUST be already protonated.
+  --prep_lig         <0|1>        (default=0) Prepare ligand. Ligand MUST be already protonated.
+  --include_cof      <0|1>        (default=0) Include cofactor.
+  --prep_cof         <0|1>        (default=0) Prepare cofactor if --include_cof 1. Cofactor MUST be already protonated.
+  --prep_topology    <0|1>        (default=1) Prepare topology files.
+  --prep_MD          <0|1>        (default=1) Prepare MD input files.
+  --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1.
+  --charge_method    <string>     (default="abcg2") Charge method if --calc_lig_charge 1.
+  --lig_ff           <gaff|gaff2> (default="gaff2") Small molecule forcefield. This applies both ligand and cofactor.
+  --prot_ff          <string>     (default="ff19SB") Protein forcefield.
+  --water_model      <string>     (default="opc") Water model used in MD.
+  --box_size         <integer>    (default=14) Size of water box.
+  --protocol         <steps>      Custom MD protocol. Sequence of blocks starting with 'minimization' or 'moldyn',
+                                  followed by a step name and Amber parameters. Use single quotes for masks
+                                  to defer shell expansion of ${TOTALRES}.
+                                  Example: --protocol minimization min1 restraintmask ':1-${TOTALRES}&!@H=' restraint_wt 25.0 \
+                                           moldyn md_nvt irest 0 ntx 1 ntb 1 nstlim 25000
+  --amber_options                 Show all Amber parameters available for --protocol blocks and exit.
+
 ```
 ### Working directory example
 Below there is an example of a working directory with the required receptor, but no ligand and cofactor.
