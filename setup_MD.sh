@@ -377,6 +377,7 @@ function NetCharge() {
   local lig_name=$2
 
   log " Computing net charge of ${lig_name}"
+  CheckFiles ${lig_lib_dir}/${lig_name}.mol2
   LIGAND_NET_CHARGE=$(awk '/ATOM/{ f = 1; next } /BOND/{ f = 0 } f' ${lig_lib_dir}/${lig_name}.mol2 \
                       | awk '{sum += $9} END {printf "%.0f\n", sum}')
   log " Net charge of ${lig_name}: ${LIGAND_NET_CHARGE}"
@@ -392,7 +393,8 @@ function PrepareSmallMolecule() {
   local lig_lib_dir=$4
 
   CheckProgram "antechamber" "parmchk2" "tleap"
-
+  CheckDir ${lig_lib_dir}
+  
   log "======================================"
   log " Preparing small molecule: ${lig_name} (mode=${mode})"
 
@@ -489,8 +491,9 @@ function TopologyParser() {
   #   Rec when prot_only without cof
   #   Com otherwise
   # These directories are relatives to TOPO_DIR folder.
-    
+  # MODE is setup in main script section
   #MODE=$1
+  
   LIG=$1
 
   # Validations
@@ -1183,7 +1186,6 @@ fi
 
 ## ====== End Create MD files ======
 
-## ====== End Create MD files ======
 log "=========================================="
 log "setup_MD completed successfully"
 log "=========================================="
