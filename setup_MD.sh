@@ -55,6 +55,7 @@ Optional:
   --calc_lig_charge  <0|1>        (default=1) Compute ligand (and cofactor) atoms' partial charges if --prep_lig 1.
   --charge_method    <string>     (default="abcg2") Charge method if --calc_lig_charge 1.
   --lig_ff           <gaff|gaff2> (default="gaff2") Small molecule forcefield. This applies both ligand and cofactor.
+  --prep_lib         <0|1>        (default=0) Obtain ligand .lib file.
   --prot_ff          <string>     (default="ff19SB") Protein forcefield.
   --water_model      <string>     (default="opc") Water model used in MD.
   --box_size         <integer>    (default=14) Size of water box.
@@ -140,6 +141,7 @@ MMPBSA=0
 ENSEMBLE="npt"
 PROTOCOL_ARGS=()
 LIG_FF="gaff2"
+PREP_LIB=0
 PROT_FF="ff19SB"
 WATER_MODEL="opc"
 BOX_SIZE=14
@@ -163,6 +165,7 @@ while [[ $# -gt 0 ]]; do
   '--charge_method'          ) shift ; CHARGE_METHOD=$1 ;;
   '--threads'                ) shift ; NTHREADS=$1 ;;
   '--lig_ff'                 ) shift ; LIG_FF=$1 ;;
+  '--prep_lib'               ) shift ; PREP_LIB=$1 ;;
   '--prot_ff'                ) shift ; PROT_FF=$1 ;;
   '--water_model'            ) shift ; WATER_MODEL=$1 ;;
   '--box_size'               ) shift ; BOX_SIZE=$1 ;;
@@ -440,17 +443,18 @@ function PrepareSmallMolecule() {
   parmchk2 -i "${lig_lib_dir}/${lig_name}_prep.mol2" -f mol2 \
            -o "${lig_lib_dir}/${lig_name}.frcmod"
 
-  log " Running tleap to generate ${lig_name}.lib"
-  cat > ${lig_lib_dir}/leap_lib.in <<EOF
-source leaprc.water.${WATER_MODEL}
-source leaprc.${LIG_FF}
+  if [[ ${PREP_LIB} -eq 1 ]]; then
+    log " Running tleap to generate ${lig_name}.lib"
+    cat > ${lig_lib_dir}/leap_lib.in <<-EOF
+      source leaprc.water.${WATER_MODEL}
+      source leaprc.${LIG_FF}
 
-loadAmberParams ${lig_name}.frcmod
-${mode} = loadmol2 ${lig_name}_prep.mol2
-check ${mode}
-saveoff ${mode} ${lig_name}.lib
+      loadAmberParams ${lig_name}.frcmod
+      ${mode} = loadmol2 ${lig_name}_prep.mol2
+      check ${mode}
+      saveoff ${mode} ${lig_name}.lib
 
-quit
+      quit
 EOF
     tleap -f "leap_lib.in" > prepare_ligand.log 2>&1
   log " Done preparing small molecule: ${lig_name}"
