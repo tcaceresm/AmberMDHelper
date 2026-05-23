@@ -533,8 +533,8 @@ function TopologyParser() {
 }
 
 function PrepareTopology() {
+  # Create tleap input file and run tleap
 
-  #ParseTopologyOptions "$@"
   CheckProgram "tleap"
 
   log "======================================"
