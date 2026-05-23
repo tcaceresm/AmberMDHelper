@@ -450,6 +450,7 @@ function PrepareSmallMolecule() {
       quit
 EOF
     tleap -f "leap_lib.in" > prepare_ligand.log 2>&1
+  fi
   log " Done preparing small molecule: ${lig_name}"
   cd ${WDDIR}
 }
