@@ -1063,6 +1063,7 @@ function CLIflags() {
   log " --calc_lig_charge : ${COMPUTE_CHARGES}"
   log " --charge_method   : ${CHARGE_METHOD}"
   log " --lig_ff          : ${LIG_FF}"
+  log " --prep_lib        : ${PREP_LIB}"
   log " --prot_ff         : ${PROT_FF}"
   log " --water_model     : ${WATER_MODEL}"
   log " --box_size        : ${BOX_SIZE}"
