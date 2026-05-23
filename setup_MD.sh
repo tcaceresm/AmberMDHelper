@@ -387,7 +387,8 @@ function NetCharge() {
 function PrepareSmallMolecule() {
   # Prepare non-standard residue (small molecule - ligand or cofactor)
   # A good idea is to parallelize this.
-  local mode=$1
+  
+  local mode=$1 #COF or LIG
   local lig_path=$2
   local lig_name=$3
   local lig_lib_dir=$4
@@ -398,30 +399,31 @@ function PrepareSmallMolecule() {
   log "======================================"
   log " Preparing small molecule: ${lig_name} (mode=${mode})"
 
-  # copy from WDDIR/ligands/ to lib_dir
+  # copy original mol2 files from WDDIR/ligands/ to lib_dir
   cp ${lig_path} ${lig_lib_dir} || exit 1
   cd ${lig_lib_dir}
   
-  NetCharge ${lig_lib_dir} ${lig_name}
+  NetCharge ${lig_lib_dir} ${lig_name} # This is why molecule should be already
+                                       # protonated.
 
   if [[ ${COMPUTE_CHARGES} -eq 1 ]]; then
-    log " Running antechamber"
+    log " Running antechamber (with charge calculation)"
     log " antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2
-                      -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2
+                      -o "${lig_lib_dir}/${lig_name}_prep.mol2" -fo mol2
                       -c "${CHARGE_METHOD}" -nc "${LIGAND_NET_CHARGE}"
                       -at ${LIG_FF} -rn "${mode}" -pf y"
     
     antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
-                -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 \
+                -o "${lig_lib_dir}/${lig_name}_prep.mol2" -fo mol2 \
                 -c "${CHARGE_METHOD}" -nc "${LIGAND_NET_CHARGE}" \
                 -at ${LIG_FF} -rn "${mode}" -pf y
   else
     log " Running antechamber (no charge calculation)"
     log " antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2
-                      -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2
+                      -o "${lig_lib_dir}/${lig_name}_prep.mol2" -fo mol2
                       -at ${LIG_FF} -rn "${mode}" -pf y"
     antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
-                -o "${lig_lib_dir}/${lig_name}.mol2" -fo mol2 \
+                -o "${lig_lib_dir}/${lig_name}_prep.mol2" -fo mol2 \
                 -at ${LIG_FF} -rn "${mode}" -pf y
   fi
 
@@ -433,9 +435,9 @@ function PrepareSmallMolecule() {
               -dr n -at ${LIG_FF} -rn "${mode}"
 
   log " running parmchk2 to obtain frcmod"
-  log " parmchk2 -i "${lig_lib_dir}/${lig_name}.mol2" -f mol2 
+  log " parmchk2 -i "${lig_lib_dir}/${lig_name}_prep.mol2" -f mol2 
                  -o "${lig_lib_dir}/${lig_name}.frcmod" "
-  parmchk2 -i "${lig_lib_dir}/${lig_name}.mol2" -f mol2 \
+  parmchk2 -i "${lig_lib_dir}/${lig_name}_prep.mol2" -f mol2 \
            -o "${lig_lib_dir}/${lig_name}.frcmod"
 
   log " Running tleap to generate ${lig_name}.lib"
@@ -444,15 +446,15 @@ source leaprc.water.${WATER_MODEL}
 source leaprc.${LIG_FF}
 
 loadAmberParams ${lig_name}.frcmod
-${mode} = loadmol2 ${lig_name}.mol2
+${mode} = loadmol2 ${lig_name}_prep.mol2
 check ${mode}
 saveoff ${mode} ${lig_name}.lib
 
 quit
 EOF
     tleap -f "leap_lib.in" > prepare_ligand.log 2>&1
-    log " Done preparing small molecule: ${lig_name}"
-    cd ${WDDIR}
+  log " Done preparing small molecule: ${lig_name}"
+  cd ${WDDIR}
 }
 
 
@@ -555,14 +557,13 @@ EOF
   log "Checking if cofactor parameters file exists."
   CheckFiles ${COF_LIB_DIR}/${COFACTOR_NAME}.lib \
              ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod \
-             ${COF_LIB_DIR}/${COFACTOR_NAME}_lig.pdb
+             ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
 
   cat <<EOF >> ${tleap_input}
 
 loadoff ${COF_LIB_DIR}/${COFACTOR_NAME}.lib
 loadAmberParams ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod
-cof = loadpdb ${COF_LIB_DIR}/${COFACTOR_NAME}_lig.pdb
-savepdb cof ./${COFACTOR_NAME}_cof.pdb
+cof = loadmol2 ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
 saveAmberParm cof ./${COFACTOR_NAME}_vac_cof.parm7 ./${COFACTOR_NAME}_vac_cof.rst7
 EOF
   fi
@@ -571,13 +572,12 @@ EOF
   if [[ ! -z "${LIG}" ]]; then
     CheckFiles "${LIG_LIB_DIR}/${LIG}.lib" \
                "${LIG_LIB_DIR}/${LIG}.frcmod" \
-               "${LIG_LIB_DIR}/${LIG}_lig.pdb"
+               "${LIG_LIB_DIR}/${LIG}_prep.mol2"
     cat <<EOF >> ${tleap_input}
 
 loadoff ${LIG_LIB_DIR}/${LIG}.lib
 loadAmberParams ${LIG_LIB_DIR}/${LIG}.frcmod
-lig = loadpdb ${LIG_LIB_DIR}/${LIG}_lig.pdb
-savepdb lig ./${LIG}_lig.pdb
+lig = loadmol2 ${LIG_LIB_DIR}/${LIG}_prep.mol2
 saveAmberParm lig ./${LIG}_vac_lig.parm7 ./${LIG}_vac_lig.rst7
 EOF
   fi
