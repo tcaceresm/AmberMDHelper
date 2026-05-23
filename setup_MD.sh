@@ -136,8 +136,6 @@ PREP_TOPO=1
 PREP_MD=1
 COMPUTE_CHARGES=1
 CHARGE_METHOD="abcg2"
-MMPBSA=0
-#NTHREADS=1
 ENSEMBLE="npt"
 PROTOCOL_ARGS=()
 LIG_FF="gaff2"
@@ -163,7 +161,6 @@ while [[ $# -gt 0 ]]; do
   '--prep_MD'                ) shift ; PREP_MD=$1 ;;
   '--calc_lig_charge'        ) shift ; COMPUTE_CHARGES=$1 ;;
   '--charge_method'          ) shift ; CHARGE_METHOD=$1 ;;
-  '--threads'                ) shift ; NTHREADS=$1 ;;
   '--lig_ff'                 ) shift ; LIG_FF=$1 ;;
   '--prep_lib'               ) shift ; PREP_LIB=$1 ;;
   '--prot_ff'                ) shift ; PROT_FF=$1 ;;
@@ -455,36 +452,6 @@ EOF
   cd ${WDDIR}
 }
 
-
-function CombineWrapper() {
-  # Wrapper to setup Combine command from tleap
-  # Combine is necessary when cof or lig is present
-  # When prot_only:
-  #   rec is receptor
-  #   com is rec + cofactor
-  # When prot_lig:
-  #   rec is rec + cofactor (if present)
-  #   com is rec + cofactor + lig
-
-  local input_file=$1
-  local mode=$2
-
-  if [[ ${mode} == "prot_only" && ${INCLUDE_COFACTOR} -eq 1 ]]; then
-    echo -en "\ncom = combine {rec cof} " >> ${input_file}
-  fi
-
-  if [[ ${mode} == "prot_lig" ]]; then
-    if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
-      echo -en "\nrec = combine {rec cof} " >> ${input_file}
-      echo -en "\ncom = combine {rec lig} " >> ${input_file}
-    else
-      echo -en "\ncom = combine {rec lig} " >> ${input_file}
-    fi
-  fi
-
-}
-
-
 function TopologyParser() {
   # Parse relevant variables
   # Target is com or rec:
@@ -524,107 +491,196 @@ function TopologyParser() {
       COF_LIB_DIR="../../../cofactor_lib/${COFACTOR_NAME}"
     fi
   fi
+}
 
-  if [[ ${MODE} == "prot_only" && ! ${INCLUDE_COFACTOR} -eq 1 ]]; then
-    TARGET="rec"
-  else
-    TARGET="com"
+function LoadFFLeap() {
+  # Load protein, water and ligand ff
+
+  local tleap_input=$1
+
+  cat > "${tleap_input}" <<EOF 
+source leaprc.protein.${PROT_FF}
+source leaprc.water.${WATER_MODEL}
+EOF
+  if [[ ${PROT_LIG_MD} -eq 1 || ${INCLUDE_COFACTOR} -eq 1 ]]; then
+  cat >> ${tleap_input} <<EOF
+source leaprc.${LIG_FF}
+EOF
   fi
 }
 
+function PrepareCofactorLeap() {
+
+  local tleap_input=$1
+  CheckFiles ${tleap_input}
+
+  log "Checking if cofactor parameters file exists."
+  CheckFiles ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod \
+             ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
+
+  cat >> ${tleap_input} <<EOF
+
+loadAmberParams ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod
+cof = loadmol2 ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
+saveAmberParm cof ./${COFACTOR_NAME}_vac_cof.parm7 ./${COFACTOR_NAME}_vac_cof.rst7
+EOF
+
+}
+
+function PrepareLigLeap() {
+  # Append ligand parameters and vacuum topology to tleap input.
+  # LIG and LIG_LIB_DIR are set by TopologyParser (prot_lig mode only).
+
+  local tleap_input=$1
+  CheckFiles "${tleap_input}"
+
+  CheckFiles "${LIG_LIB_DIR}/${LIG}.frcmod" \
+             "${LIG_LIB_DIR}/${LIG}_prep.mol2"
+
+  cat >> "${tleap_input}" <<EOF
+
+loadAmberParams ${LIG_LIB_DIR}/${LIG}.frcmod
+lig = loadmol2 ${LIG_LIB_DIR}/${LIG}_prep.mol2
+saveAmberParm lig ./${LIG}_vac_lig.parm7 ./${LIG}_vac_lig.rst7
+EOF
+}
+
+function PrepareRecLeap() {
+  # Append receptor loading and vacuum topology to tleap input.
+  # The receptor is always loaded before ligand/cofactor combine steps
+  # so that residue numbering in the complex starts from the receptor.
+
+  local tleap_input=$1
+  CheckFiles "${tleap_input}"
+  CheckFiles "${PREP_PDB_DIR}/${RECEPTOR_NAME}_prep.pdb"
+
+  cat >> "${tleap_input}" <<EOF
+
+rec = loadpdb ${PREP_PDB_DIR}/${RECEPTOR_NAME}_prep.pdb
+savepdb rec ./${RECEPTOR_NAME}_vac_rec.pdb
+saveAmberParm rec ./${TOPO_NAME}_vac_rec.parm7 ./${TOPO_NAME}_vac_rec.rst7
+EOF
+}
+
+function CombineLeap() {
+  # Append a tleap combine block and save the vacuum complex topology.
+  # Arguments:
+  #   $1  tleap input file
+  #   $2  leap units to combine, space-separated (e.g. "rec cof lig")
+  #   $3  base name used for output files (e.g. ${LIG} or ${RECEPTOR_NAME})
+
+  local tleap_input=$1
+  local units=$2
+  local base_name=$3
+  CheckFiles "${tleap_input}"
+
+  cat >> "${tleap_input}" <<EOF
+
+com = combine { ${units} }
+savepdb com ./${base_name}_vac_com.pdb
+saveAmberParm com ./${base_name}_vac_com.parm7 ./${base_name}_vac_com.rst7
+EOF
+}
+
+function SolvateLeap() {
+  # Neutralise, solvate and save the final solvated topology.
+  # Arguments:
+  #   $1  tleap input file
+  #   $2  leap unit to solvate (rec | com)
+  #   $3  base name for output files
+  # Output files follow the pattern: ${base_name}_solv_${unit}.*
+
+  local tleap_input=$1
+  local unit=$2
+  local base_name=$3
+  CheckFiles "${tleap_input}"
+
+  cat >> "${tleap_input}" <<EOF
+
+addIons ${unit} Na+ 0
+addIons ${unit} Cl- 0
+
+solvatebox ${unit} ${WATER_MODEL^^}BOX ${BOX_SIZE}
+
+savepdb ${unit} ./${base_name}_solv_${unit}.pdb
+saveAmberParm ${unit} ./${base_name}_solv_${unit}.parm7 ./${base_name}_solv_${unit}.rst7
+
+quit
+EOF
+}
+
+
 function PrepareTopology() {
-  # Create tleap input file and run tleap
+  # Build the tleap input file and run tleap to generate topology files.
+  #
+  # Leap block order per scenario:
+  #
+  #   prot_only (no cof):
+  #     LoadFFLeap --> PrepareRecLeap --> SolvateLeap{rec}
+  #
+  #   prot_only + cofactor:
+  #     LoadFFLeap --> PrepareCofactorLeap --> PrepareRecLeap
+  #       --> CombineLeap{rec cof} --> SolvateLeap{com}
+  #
+  #   prot_lig (no cof):
+  #     LoadFFLeap --> PrepareRecLeap --> PrepareLigLeap
+  #       --> CombineLeap{rec lig} --> SolvateLeap{com}
+  #
+  #   prot_lig + cofactor:
+  #     LoadFFLeap --> PrepareCofactorLeap --> PrepareRecLeap --> PrepareLigLeap
+  #       --> CombineLeap{rec cof lig} --> SolvateLeap{com}
 
   CheckProgram "tleap"
 
   log "======================================"
   log "Preparing topologies (mode=${MODE})   "
   log "======================================"
-  
-  cd ${TOPO_DIR}
 
-  # Create common info leap
+  cd "${TOPO_DIR}"
+  log " TOPO_DIR is ${TOPO_DIR}"
+
   local tleap_input="${TOPO_DIR}/tleap.in"
-  cat <<EOF > ${tleap_input}
-source leaprc.protein.${PROT_FF}
-source leaprc.water.${WATER_MODEL}
-source leaprc.${LIG_FF}
-EOF
-  # Add cofactor
+
+  # Force-field sources 
+  LoadFFLeap "${tleap_input}"
+
+  # Small molecule parameters (before receptor load) 
   if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
-  log "Checking if cofactor parameters file exists."
-  CheckFiles ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod \
-             ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
-
-  cat <<EOF >> ${tleap_input}
-
-loadAmberParams ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod
-cof = loadmol2 ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
-saveAmberParm cof ./${COFACTOR_NAME}_vac_cof.parm7 ./${COFACTOR_NAME}_vac_cof.rst7
-EOF
+    PrepareCofactorLeap "${tleap_input}"
   fi
 
-  # Add ligand
-  if [[ ! -z "${LIG}" ]]; then
-    CheckFiles "${LIG_LIB_DIR}/${LIG}.lib" \
-               "${LIG_LIB_DIR}/${LIG}.frcmod" \
-               "${LIG_LIB_DIR}/${LIG}_prep.mol2"
-    cat <<EOF >> ${tleap_input}
-
-loadoff ${LIG_LIB_DIR}/${LIG}.lib
-loadAmberParams ${LIG_LIB_DIR}/${LIG}.frcmod
-lig = loadmol2 ${LIG_LIB_DIR}/${LIG}_prep.mol2
-saveAmberParm lig ./${LIG}_vac_lig.parm7 ./${LIG}_vac_lig.rst7
-EOF
+  # Ligand (prot_lig only) 
+  if [[ -n "${LIG}" ]]; then
+    PrepareLigLeap "${tleap_input}"
   fi
 
-  # Add Rec step 1
-  # Because rec is receptor + cof in prot_lig
-  CheckFiles "${PREP_PDB_DIR}/${RECEPTOR_NAME}_prep.pdb"
-  cat <<EOF >> ${tleap_input}
+  # Receptor 
+  PrepareRecLeap "${tleap_input}"
 
-rec = loadpdb ${PREP_PDB_DIR}/${RECEPTOR_NAME}_prep.pdb
-EOF
+  #  Combine + solvate (scenario-specific) 
+  if [[ ${MODE} == "prot_only" && ${INCLUDE_COFACTOR} -eq 0 ]]; then
+    SolvateLeap "${tleap_input}" "rec" "${RECEPTOR_NAME}"
 
-  # setup combine command from leap to create complex if contains cofactor and/or ligand
-  CombineWrapper ${tleap_input} ${MODE}
+  elif [[ ${MODE} == "prot_only" && ${INCLUDE_COFACTOR} -eq 1 ]]; then
+    CombineLeap "${tleap_input}" "rec cof" "${RECEPTOR_NAME}"
+    SolvateLeap "${tleap_input}" "com" "${RECEPTOR_NAME}"
 
-  # Parse outputs name
-  #TopologyNameWrapper ${MODE} ${CONTAIN_COFACTOR}
+  elif [[ ${MODE} == "prot_lig" && ${INCLUDE_COFACTOR} -eq 0 ]]; then
+    CombineLeap "${tleap_input}" "rec lig" "${LIG}"
+    SolvateLeap "${tleap_input}" "com" "${LIG}"
 
-  # If prot_only and no cofactor
-  if [[ ${MODE} == "prot_lig" || ${INCLUDE_COFACTOR} -eq 1 ]]; then
-    cat <<EOF >> ${tleap_input}
-
-savepdb rec ./${TOPO_NAME}_rec.pdb
-saveAmberParm rec ./${TOPO_NAME}_vac_rec.parm7 ./${TOPO_NAME}_vac_rec.rst7
-EOF
+  elif [[ ${MODE} == "prot_lig" && ${INCLUDE_COFACTOR} -eq 1 ]]; then
+    CombineLeap "${tleap_input}" "rec cof lig" "${LIG}"
+    SolvateLeap "${tleap_input}" "com" "${LIG}"
   fi
 
-  # Add remaining options to leap input
-  cat <<EOF >> ${tleap_input}
-
-savepdb ${TARGET} ./${TOPO_NAME}_vac_${TARGET}.pdb
-saveAmberParm ${TARGET} ./${TOPO_NAME}_vac_${TARGET}.parm7 ./${TOPO_NAME}_vac_${TARGET}.rst7
-
-addIons ${TARGET} Na+ 0
-addIons ${TARGET} Cl- 0
-
-solvatebox ${TARGET} ${WATER_MODEL^^}BOX ${BOX_SIZE}
-
-savepdb ${TARGET} ./${TOPO_NAME}_solv_${TARGET}.pdb
-saveAmberParm ${TARGET} ./${TOPO_NAME}_solv_${TARGET}.parm7 ./${TOPO_NAME}_solv_${TARGET}.rst7
-
-quit
-EOF
-
+  #  Run tleap 
   log " Running tleap for topology: ${TOPO_NAME}"
-  log "  Directory: $(realpath .)" 
+  log "  Directory: $(realpath .)"
   log "  File: tleap.in"
-  tleap -f ./tleap.in || { log "ERROR: tleap failed during ${tleap_input}"; exit 1; }
+  tleap -f ./tleap.in || { log "ERROR: tleap failed for ${tleap_input}"; exit 1; }
   log " Done preparing topology: ${TOPO_NAME}"
-  cd ${WDDIR}
-
+  cd "${WDDIR}"
 }
 
 # MD files
@@ -1028,8 +1084,6 @@ ScriptInfo
 # Required options
 CheckVariable "WDDIR"
 
-# Path of this scripts and input files
-SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Path of the working directory which contains receptor, ligand (optional) and cofactor (optional) folders
 WDDIR=$(realpath "$WDDIR")
@@ -1057,7 +1111,7 @@ MAIN_LOG="${LOG_DIR}/setup_MD.log"
 CLIflags
 
 if [[ ${PROT_LIG_MD} -eq 1 || ${PREP_LIG} -eq 1 ]]; then
-  LigParser ${RECEPTOR_NAME}
+  LigParser
 fi
 
 ## ====== Create Directories ======
@@ -1143,8 +1197,13 @@ if [[ ${PREP_MD} -eq 1 ]]; then
   if [[ ${PROT_ONLY_MD} -eq 1 ]]; then
     log "=========================================="
     log "Creating MD input files: prot_only"
-    TopologyParser "prot_only"
-    TotalResWrapper ${TOPO_DIR}/${RECEPTOR_NAME}_vac_${TARGET}.parm7
+    TopologyParser
+
+    if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
+      TotalResWrapper ${TOPO_DIR}/${RECEPTOR_NAME}_vac_com.parm7
+    else
+      TotalResWrapper ${TOPO_DIR}/${RECEPTOR_NAME}_vac_rec.parm7
+    fi
 
     MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD"
     for REP in $(seq 1 ${REPLICAS}); do
@@ -1168,7 +1227,7 @@ if [[ ${PREP_MD} -eq 1 ]]; then
         log "=========================================="
         log "Creating MD input files: prot_lig | ligand: ${LIGAND_NAME} | rep: ${REP}"
         TopologyParser ${LIGAND_NAME}
-        TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_${TARGET}.parm7
+        TotalResWrapper ${TOPO_DIR}/${LIGAND_NAME}_vac_com.parm7
 
         MODE_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${LIGAND_NAME}"
         EQUI_DIR="${MODE_DIR}/MD/rep${REP}/equi/${ENSEMBLE}"
