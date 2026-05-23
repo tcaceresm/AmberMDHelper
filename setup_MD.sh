@@ -430,13 +430,6 @@ function PrepareSmallMolecule() {
                 -at ${LIG_FF} -rn "${mode}" -pf y
   fi
 
-  log " antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2
-                    -o "${lig_lib_dir}/${lig_name}_lig.pdb" -fo pdb 
-                    -dr n -at ${LIG_FF} -rn "${mode}""
-  antechamber -i "${lig_lib_dir}/${lig_name}.mol2" -fi mol2 \
-              -o "${lig_lib_dir}/${lig_name}_lig.pdb" -fo pdb \
-              -dr n -at ${LIG_FF} -rn "${mode}"
-
   log " running parmchk2 to obtain frcmod"
   log " parmchk2 -i "${lig_lib_dir}/${lig_name}_prep.mol2" -f mol2 
                  -o "${lig_lib_dir}/${lig_name}.frcmod" "
