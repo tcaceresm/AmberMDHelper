@@ -553,13 +553,11 @@ EOF
   # Add cofactor
   if [[ ${INCLUDE_COFACTOR} -eq 1 ]]; then
   log "Checking if cofactor parameters file exists."
-  CheckFiles ${COF_LIB_DIR}/${COFACTOR_NAME}.lib \
-             ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod \
+  CheckFiles ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod \
              ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
 
   cat <<EOF >> ${tleap_input}
 
-loadoff ${COF_LIB_DIR}/${COFACTOR_NAME}.lib
 loadAmberParams ${COF_LIB_DIR}/${COFACTOR_NAME}.frcmod
 cof = loadmol2 ${COF_LIB_DIR}/${COFACTOR_NAME}_prep.mol2
 saveAmberParm cof ./${COFACTOR_NAME}_vac_cof.parm7 ./${COFACTOR_NAME}_vac_cof.rst7
