@@ -131,6 +131,27 @@ function CheckVariable() {
   done
 }
 
+function CLIflags() {
+  log "=========================================="
+  log "Starting MMPBSA"
+  log "CLI flags:"
+  log " --work_dir        : ${WDDIR}"
+  log " --equi            : ${RUN_EQUI}"
+  log " --prod            : ${RUN_PROD}"
+  log " --rescore         : ${RUN_RESCORE}"
+  log " --interval        : ${INTERVAL}"
+  log " --replicas        : ${REPLICAS}"
+  log " --start_replica   : ${START_REPLICA}"
+  log " --parallel        : ${PARALLEL}"
+  log " --cores           : ${CORES}"
+  log "Receptor           : ${RECEPTOR_NAME}"
+  log "Working directory  : ${WDDIR}"
+  log "Replicas           : ${START_REPLICA} to ${REPLICAS}"
+  log "Run equi           : ${RUN_EQUI} | Run prod: ${RUN_PROD} | Run rescore: ${RUN_RESCORE}"
+  log "Log file           : ${MAIN_LOG}"
+  log "=========================================="
+}
+
 function log() {
   local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
   local first_line=1
@@ -305,24 +326,7 @@ LOG_DIR="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD"
 mkdir -p "${LOG_DIR}"
 MAIN_LOG="${LOG_DIR}/mmpbsa.log"
 
-log "=========================================="
-log "Starting MMPBSA"
-log "CLI flags:"
-log " --work_dir        : ${WDDIR}"
-log " --equi            : ${RUN_EQUI}"
-log " --prod            : ${RUN_PROD}"
-log " --rescore         : ${RUN_RESCORE}"
-log " --interval        : ${INTERVAL}"
-log " --replicas        : ${REPLICAS}"
-log " --start_replica   : ${START_REPLICA}"
-log " --parallel        : ${PARALLEL}"
-log " --cores           : ${CORES}"
-log "Receptor           : ${RECEPTOR_NAME}"
-log "Working directory  : ${WDDIR}"
-log "Replicas           : ${START_REPLICA} to ${REPLICAS}"
-log "Run equi           : ${RUN_EQUI} | Run prod: ${RUN_PROD} | Run rescore: ${RUN_RESCORE}"
-log "Log file           : ${MAIN_LOG}"
-log "=========================================="
+CLIflags
 
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
