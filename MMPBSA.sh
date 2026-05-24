@@ -119,6 +119,18 @@ function CheckFiles() {
   done
 }
 
+function CheckVariable() {
+  # Check if variable is empty or not defined.
+  local var_name var_value
+  for var_name in "$@"; do
+    var_value="${!var_name}"  # indirección: obtiene el valor por nombre
+    if [[ -z "${var_value}" ]]; then
+      echo "Error: variable '${var_name}' is empty or not defined." >&2
+      exit 1
+    fi
+  done
+}
+
 function log() {
   local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
   local first_line=1
@@ -214,6 +226,31 @@ dec_verbose=1, idecomp=1,
 EOF
 }
 
+function GetLigName() {
+  local lig_topo=$1
+  log "=========================================="
+  log "Obtaining ligand residue name"
+
+  LIG_RESIDUE_NAME=$(cpptraj -p ${lig_topo} --resmask \* | tail -n 1 | awk '{print $2}')
+  CheckVariable "LIG_RESIDUE_NAME"
+}
+
+function PrepareTopologies() {
+  # Wrapper to ante-MMPBSA.py
+  # We remove LIG from COM topology.
+  # This solve the issue when we consider a cofactor.
+
+  CheckProgram "ante-MMPBSA.py"
+
+  GetLigName ${VAC_LIG_TOPO}
+
+  ante-MMPBSA.py -p ${VAC_COM_TOPO} \
+                 -n ":${LIG_RESIDUE_NAME}" \
+                 -l ${LIG_RESIDUE_NAME}.parm7 \
+                 -r REC.parm7
+
+}
+
 function RunMMPBSA() {
   # Run mmpbsa
   # Two options: serial and cpu parallelized using mpi
@@ -298,7 +335,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
   for LIG_NAME in ${LIGANDS_PATH[@]}; do
 
-    # Required for both MD and MMPBSA
+    # Required for  MMPBSA
     LIG_NAME=$(basename ${LIG_NAME} .mol2)
     log "=========================================="
     log "Ligand: ${LIG_NAME} | Rep: ${REP}"
@@ -313,6 +350,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
       ParseFiles "rescore" ${LIG_NAME} ${REP}
       CreateInputFile ${MMPBSA_DIR}
+      PrepareTopologies
     
       RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
                 ${EQUI_TRAJ} ${VAC_COM_TOPO} ${VAC_REC_TOPO} \
@@ -328,12 +366,15 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
       cd ${MMPBSA_DIR}
       log "Current working directory: ${MMPBSA_DIR}"
+      
       ParseFiles "equi" ${LIG_NAME} ${REP}
       CreateInputFile ${MMPBSA_DIR}
+      PrepareTopologies 
     
       RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                ${EQUI_TRAJ} ${VAC_COM_TOPO} ${VAC_REC_TOPO} \
-                ${VAC_LIG_TOPO}
+                ${EQUI_TRAJ} ${VAC_COM_TOPO} \
+                ${LIG_RESIDUE_NAME}.parm7 \
+                REC.parm7
     
       cd ${WDDIR}
       log "Done equi | ligand: ${LIG_NAME} | rep: ${REP}"
@@ -348,10 +389,12 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
 
       ParseFiles "prod" ${LIG_NAME} ${REP}
       CreateInputFile ${MMPBSA_DIR}
+      PrepareTopologies
     
       RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                ${PROD_TRAJ} ${VAC_COM_TOPO} ${VAC_REC_TOPO} \
-                ${VAC_LIG_TOPO}
+                ${EQUI_TRAJ} ${VAC_COM_TOPO} \
+                ${LIG_RESIDUE_NAME}.parm7 \
+                REC.parm7
     
       cd ${WDDIR}
       log "Done prod | ligand: ${LIG_NAME} | rep: ${REP}"
