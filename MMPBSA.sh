@@ -53,6 +53,8 @@ Optional:
  --equi             <0|1>        (default=1) Perform MM/PBSA using equilibration phase trajectory (noWAT_traj.nc)
  --prod             <0|1>        (default=1) Perform MM/PBSA using production phase trajectory (noWAT_traj.nc).
  --rescore          <0|1>        (default=0) Perform MM/PBSA using minimized (2-step energy minimization) structure from equilibration phase.
+ --keep_wat         <integer>    (default=0) Keep the N closest water molecules to the ligand. N is automatically obtained and it represent the
+                                             average number of waters of the second solvation shell.
  --interval         <integer>    (default=1) The offset from which to choose frames from each trajectory file.
  -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
  --start_replica    <integer>    (default=1) Run from --start_replica to --replicas.
@@ -73,6 +75,7 @@ fi
 RUN_EQUI=1
 RUN_PROD=1
 RUN_RESCORE=0
+KEEP_WATERS=0
 INTERVAL=1
 START_REPLICA=1
 REPLICAS=3
@@ -88,6 +91,7 @@ while [[ $# -gt 0 ]]; do
   '--equi'                   ) shift ; RUN_EQUI=$1 ;;
   '--prod'                   ) shift ; RUN_PROD=$1 ;;
   '--rescore'                ) shift ; RUN_RESCORE=$1 ;;
+  '--keep_wat'               ) shift ; KEEP_WATERS=$1 ;;
   '--interval'               ) shift ; INTERVAL=$1 ;;
   '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
   '--start_replica'          ) shift ; START_REPLICA=$1 ;;
@@ -139,6 +143,7 @@ function CLIflags() {
   log " --equi            : ${RUN_EQUI}"
   log " --prod            : ${RUN_PROD}"
   log " --rescore         : ${RUN_RESCORE}"
+  log " --keep_wat        : ${KEEP_WATERS}"
   log " --interval        : ${INTERVAL}"
   log " --replicas        : ${REPLICAS}"
   log " --start_replica   : ${START_REPLICA}"
@@ -176,7 +181,9 @@ function ParseDirectory() {
   local lig=$2
   local rep=$3
 
-  if [[ "mode" == "rescore" ]]; then
+  CheckVariable "WDDIR" "RECEPTOR_NAME"
+
+  if [[ "${mode}" == "rescore" ]]; then
     MMPBSA_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/equi/npt/mmpbsa_rescore
   else
     MMPBSA_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/${mode}/npt/mmpbsa
@@ -189,7 +196,7 @@ function CreateInputFile() {
   # MM/PBSA input file
   local mmpbsa_dir=$1
 
-  cat > ${INPUT_FILE} <<EOF
+  cat > ${mmpbsa_dir}/${INPUT_FILE} <<EOF
 Input file for PB calculation
 &general
 startframe=1, endframe=99999, interval=${INTERVAL},
@@ -209,23 +216,110 @@ function GetLigName() {
   log "=========================================="
   log "Obtaining ligand residue name"
 
+  CheckProgram "cpptraj"
   LIG_RESIDUE_NAME=$(cpptraj -p ${lig_topo} --resmask \* | tail -n 1 | awk '{print $2}')
   CheckVariable "LIG_RESIDUE_NAME"
+  log "=========================================="
+}
+
+function GetSolvationShell() {
+  local cpptraj_input=$1
+  local solvated_com_traj=$2
+  local solvated_com_parm=$3
+  local vac_lig_topo=$4
+
+  CheckProgram "cpptraj"
+  log "=========================================="
+  log "Obtaining second solvation shell"
+
+  #GetLigName ${vac_lig_topo}
+
+  cat > ${cpptraj_input} <<EOF
+parm ${solvated_com_parm}
+trajin ${solvated_com_traj}
+
+autoimage
+
+strip :Na+,Cl-
+
+watershell WS :${LIG_RESIDUE_NAME} lower 3.4 upper 5.0
+
+run
+
+runanalysis avg WS[upper] name AverageSecondWS out StatisticsAverageSecondWS.data
+writedata AverageSecondWS.data AverageSecondWS[avg]
+
+run
+EOF
+
+  cpptraj -i ${cpptraj_input}
+}
+
+function ClosestWaterShell() {
+  local cpptraj_input=$1
+  local solvated_com_traj=$2
+  local solvated_com_parm=$3
+  local vac_lig_topo=$4
+
+  CheckProgram "cpptraj"
+  CheckFiles AverageSecondWS.data
+
+  log "=========================================="
+  log "Obtaining number of wat molecules"
+
+  local avg_wat=$(awk 'NR==2 {print $2}' AverageSecondWS.data)
+
+  # Round to nearest integer
+  local nwat=$(printf "%.0f" "${avg_wat}")
+
+  log "Average second shell occupancy = ${avg_wat}"
+  log "Using ${nwat} closest waters"
+  log " Obtaining new topology and trajectory."
+
+  #GetLigName ${vac_lig_topo}
+
+  cat > ${cpptraj_input} <<EOF
+parm ${solvated_com_parm}
+trajin ${solvated_com_traj}
+
+autoimage
+
+strip :Na+,Cl-
+
+closestwaters ${nwat} :${LIG_RESIDUE_NAME} parmout ${LIG_NAME}_vac_com_CWAT.parm7
+trajout ${LIG_NAME}_vac_com_CWAT.nc
+
+run
+EOF
+
+  cpptraj -i ${cpptraj_input}
 }
 
 function PrepareTopologies() {
   # Wrapper to ante-MMPBSA.py
   # We remove LIG from COM topology.
-  # This solve the issue when we consider a cofactor.
+  # Everything else is considered the "receptor".
+
+  local vac_lig_topo=$1
+  local vac_com_topo=$2
 
   CheckProgram "ante-MMPBSA.py"
 
-  GetLigName ${VAC_LIG_TOPO}
+  #GetLigName ${vac_lig_topo}
 
-  ante-MMPBSA.py -p ${VAC_COM_TOPO} \
-                 -n ":${LIG_RESIDUE_NAME}" \
-                 -l ${LIG_RESIDUE_NAME}.parm7 \
-                 -r REC.parm7
+  if [[ ${KEEP_WATERS} -eq 0 ]]; then
+    ante-MMPBSA.py -p ${vac_com_topo} \
+                   -n ":${LIG_RESIDUE_NAME}" \
+                   -l ${LIG_RESIDUE_NAME}.parm7 \
+                   -r REC.parm7
+  else
+    ante-MMPBSA.py -p ${vac_com_topo} \
+                   -n ":${LIG_RESIDUE_NAME}" \
+                   -l ${LIG_RESIDUE_NAME}.parm7 \
+                   -r REC_CWAT.parm7   
+  fi
+
+
 
 }
 
@@ -240,34 +334,104 @@ function RunMMPBSA() {
   local rec_topo=$6
   local lig_topo=$7
 
+  CheckFiles ${input_file} ${traj} \
+             ${com_topo} ${rec_topo} ${lig_topo}
+
   if [[ ${parallel} -eq 1 ]]; then
     EXE="mpirun -np ${cores} MMPBSA.py.MPI"
-    CheckProgram ${EXE}
+    CheckProgram "mpirun" "MMPBSA.py.MPI"
   else
     EXE="MMPBSA.py"
     CheckProgram ${EXE}
   fi
 
-  log "${EXE} -O -i ${input_file}
-            -o mmpbsa_results.data
-            -eo per_frame_mmpbsa_results.data
-            -do decomp_mmpbsa_results.data
-            -deo per_frame_decomp_mmpbsa_results.data
-            -cp ${com_topo}
-            -rp ${rec_topo}
-            -lp ${lig_topo}
-            -y ${traj}"
-  # Run MMPBSA
-  ${EXE} -O -i ${input_file} \
-            -o mmpbsa_results.data \
-            -eo per_frame_mmpbsa_results.data \
-            -do decomp_mmpbsa_results.data \
-            -deo per_frame_decomp_mmpbsa_results.data \
-            -cp ${com_topo} \
-            -rp ${rec_topo} \
-            -lp ${lig_topo} \
-            -y ${traj} \
-            || { echo "Error running MMPBSA. Exiting."; exit 1; }
+  if [[ ${KEEP_WATERS} -eq 0 ]]; then
+    local result="mmpbsa_results.data"
+    local per_frame_result="per_frame_mmpbsa_results.data"
+    local decomp_result="decomp_mmpbsa_results.data"
+    local per_frame_decomp_result="per_frame_decomp_results.data"
+  else
+    local result="mmpbsa_results_CW.data"
+    local per_frame_result="per_frame_mmpbsa_results_CW.data"
+    local decomp_result="decomp_mmpbsa_results_CW.data"
+    local per_frame_decomp_result="per_frame_decomp_results_CW.data"
+
+  fi
+    log "=========================================="
+    log "Running MMPBSA"
+    log "${EXE} -O -i ${input_file}
+              -o ${result}
+              -eo ${per_frame_result}
+              -do ${decomp_result}
+              -deo ${per_frame_decomp_result}
+              -cp ${com_topo}
+              -rp ${rec_topo}
+              -lp ${lig_topo}
+              -y ${traj}"
+    # Run MMPBSA
+    ${EXE} -O -i ${input_file} \
+              -o ${result} \
+              -eo ${per_frame_result} \
+              -do ${decomp_result} \
+              -deo ${per_frame_decomp_result} \
+              -cp ${com_topo} \
+              -rp ${rec_topo} \
+              -lp ${lig_topo} \
+              -y ${traj} \
+              || { echo "Error running MMPBSA. Exiting."; exit 1; }
+
+
+}
+
+function RunMode() {
+  # Runs MM/PBSA for a given mode (rescore, equi, prod).
+  # dry_traj  : desolvated trajectory or structure (used when KEEP_WATERS=0)
+  # solv_traj : solvated trajectory (used when KEEP_WATERS!=0 to compute solvation shell)
+  local mode=$1
+  local dry_traj=$2
+  local solv_traj=$3
+
+  log "=========================================="
+  log "Doing ${mode} MMPBSA | ligand: ${LIG_NAME} | rep: ${REP}"
+  ParseDirectory "${mode}" "${LIG_NAME}" "${REP}"
+
+  cd "${MMPBSA_DIR}" || { echo "Error: cannot cd to ${MMPBSA_DIR}"; exit 1; }
+  GetLigName "${VAC_LIG_TOPO}"
+  log "Current working directory: ${MMPBSA_DIR}"
+
+  CreateInputFile "${MMPBSA_DIR}"
+
+  if [[ ${KEEP_WATERS} -eq 0 ]]; then
+
+    PrepareTopologies "${VAC_LIG_TOPO}" "${VAC_COM_TOPO}"
+
+    RunMMPBSA "${PARALLEL}" "${CORES}" "${INPUT_FILE}" \
+              "${dry_traj}" "${VAC_COM_TOPO}" \
+              REC.parm7 "${LIG_RESIDUE_NAME}.parm7"
+
+  else
+
+    GetSolvationShell "solvation_shell.in" \
+                      "${solv_traj}" \
+                      "${SOLV_COM_PARM}" \
+                      "${VAC_LIG_TOPO}"
+
+    ClosestWaterShell "closest_water.in" \
+                      "${solv_traj}" \
+                      "${SOLV_COM_PARM}" \
+                      "${VAC_LIG_TOPO}"
+
+    PrepareTopologies "${VAC_LIG_TOPO}" "${LIG_NAME}_vac_com_CWAT.parm7"
+
+    RunMMPBSA "${PARALLEL}" "${CORES}" "${INPUT_FILE}" \
+              "${LIG_NAME}_vac_com_CWAT.nc" \
+              "${LIG_NAME}_vac_com_CWAT.parm7" \
+              REC_CWAT.parm7 "${LIG_RESIDUE_NAME}.parm7"
+
+  fi
+
+  cd "${WDDIR}"
+  log "Done ${mode} | ligand: ${LIG_NAME} | rep: ${REP}"
 }
 
 ############################################################
@@ -285,81 +449,38 @@ MAIN_LOG="${LOG_DIR}/mmpbsa.log"
 
 CLIflags
 
+shopt -s nullglob
+LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
+shopt -u nullglob
+
+if [[ ${#LIGANDS_PATH[@]} -eq 0 ]]; then
+  echo "Error: ligands folder is empty."
+  exit 1
+fi
+
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
+  for LIG_NAME in "${LIGANDS_PATH[@]}"; do
 
-  LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
-  
-  if [[ ${#LIGANDS_PATH[@]} -eq 0 ]]; then
-    echo "Error: ligands folder is empty."
-    exit 1
-  fi
-
-  for LIG_NAME in ${LIGANDS_PATH[@]}; do
-
-    # Required for  MMPBSA
-    LIG_NAME=$(basename ${LIG_NAME} .mol2)
+    # Required for MMPBSA
+    LIG_NAME=$(basename "${LIG_NAME}" .mol2)
     log "=========================================="
     log "Ligand: ${LIG_NAME} | Rep: ${REP}"
     log "=========================================="
 
-    if [[ ${RUN_RESCORE} -eq 1 ]]; then
-      log "Doing MMPBSA rescoring | ligand: ${LIG_NAME} | rep: ${REP}"
-      ParseDirectory "rescore" ${LIG_NAME} ${REP}
+    VAC_COM_TOPO="../../../../../topo/${LIG_NAME}_vac_com.parm7"
+    VAC_LIG_TOPO="../../../../../topo/${LIG_NAME}_vac_lig.parm7"
+    SOLV_COM_PARM="../../../../../topo/${LIG_NAME}_solv_com.parm7"
 
-      cd ${MMPBSA_DIR}
-      log "Current working directory: ${MMPBSA_DIR}"
-
-      CheckFiles "../min2_noWAT.rst7"
-      CreateInputFile ${MMPBSA_DIR}
-      PrepareTopologies
-    
-      RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                "../min2_noWAT.rst7" ${VAC_COM_TOPO} \
-                ${LIG_RESIDUE_NAME}.parm7 \
-                REC.parm7
-    
-      cd ${WDDIR}
-      log "Done rescore | ligand: ${LIG_NAME} | rep: ${REP}"
+    if [[ ${RUN_RESCORE} -eq 1 ]]; then 
+      RunMode "rescore" "../min2_noWAT.rst7" "../min2.rst7"
     fi
-
-    if [[ ${RUN_EQUI} -eq 1 ]]; then
-      log "Doing equi MMPBSA | ligand: ${LIG_NAME} | rep: ${REP}"
-      ParseDirectory "equi" ${LIG_NAME} ${REP}
-
-      cd ${MMPBSA_DIR}
-      log "Current working directory: ${MMPBSA_DIR}"
-      
-      CheckFiles "../noWAT_traj.nc" 
-      CreateInputFile ${MMPBSA_DIR}
-      PrepareTopologies 
     
-      RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                "../noWAT_traj.nc" ${VAC_COM_TOPO} \
-                ${LIG_RESIDUE_NAME}.parm7 \
-                REC.parm7
-    
-      cd ${WDDIR}
-      log "Done equi | ligand: ${LIG_NAME} | rep: ${REP}"
+    if [[ ${RUN_EQUI}    -eq 1 ]]; then
+      RunMode "equi" "../noWAT_traj.nc" "../npt_equil_6.nc"
     fi
-
-    if [[ ${RUN_PROD} -eq 1 ]]; then
-      log "Doing prod MMPBSA | ligand: ${LIG_NAME} | rep: ${REP}"
-      ParseDirectory "prod" ${LIG_NAME} ${REP}
-
-      cd ${MMPBSA_DIR}
-      log "Current working directory: ${MMPBSA_DIR}"
-
-      CheckFiles "../noWAT_traj.nc" 
-      CreateInputFile ${MMPBSA_DIR}
-      PrepareTopologies
     
-      RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                "../noWAT_traj.nc" ${VAC_COM_TOPO} \
-                ${LIG_RESIDUE_NAME}.parm7 \
-                REC.parm7
-    
-      cd ${WDDIR}
-      log "Done prod | ligand: ${LIG_NAME} | rep: ${REP}"
+    if [[ ${RUN_PROD}    -eq 1 ]]; then
+      RunMode "prod" "../noWAT_traj.nc" "../md_prod.nc"
     fi
 
   done
