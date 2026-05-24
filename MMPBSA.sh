@@ -185,49 +185,6 @@ function ParseDirectory() {
 
 }
 
-function ParseFiles() {
-  # Set topologies and trajectories files.
-  # For an unknow reason, MMPBSA.py fails if absolute paths are used.
-  # I'm using relative paths to ${MMPBSA_DIR}
-
-  local mode=$1
-  local lig=$2
-  local rep=$3
-
-  if [[ -z "${lig}" ]]; then
-    echo "Error in ParseDirectories(): lig variable is required."
-    exit 1
-  fi
-
-  # Topologies
-  # VAC_COM_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_com.parm7
-  # VAC_REC_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_rec.parm7
-  # VAC_LIG_TOPO=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/topo/${lig}_vac_lig.parm7
-  VAC_COM_TOPO="../../../../../topo/${lig}_vac_com.parm7"
-  VAC_REC_TOPO="../../../../../topo/${lig}_vac_rec.parm7"
-  VAC_LIG_TOPO="../../../../../topo/${lig}_vac_lig.parm7"
-
-  CheckFiles ${VAC_COM_TOPO} ${VAC_REC_TOPO} ${VAC_LIG_TOPO}
-
-  # Trajectories
-  if [[ "${mode}" == "equi" ]]; then
-    # EQUI_TRAJ=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/${mode}/npt/noWAT_traj.nc
-    EQUI_TRAJ="../noWAT_traj.nc"
-    CheckFiles ${EQUI_TRAJ}
-  fi
-
-  if [[ "${mode}" == "prod" ]]; then
-    # PROD_TRAJ=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${rep}/${mode}/npt/noWAT_traj.nc
-    PROD_TRAJ="../noWAT_traj.nc"
-    CheckFiles ${PROD_TRAJ}
-  fi
-
-  if [[ "${mode}" == "rescore" ]]; then
-    RESCORE_TRAJ="../min2_noWAT.rst7"
-    CheckFiles ${RESCORE_TRAJ}
-  fi
-}
-
 function CreateInputFile() {
   # MM/PBSA input file
   local mmpbsa_dir=$1
@@ -352,13 +309,14 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       cd ${MMPBSA_DIR}
       log "Current working directory: ${MMPBSA_DIR}"
 
-      ParseFiles "rescore" ${LIG_NAME} ${REP}
+      CheckFiles "../min2_noWAT.rst7"
       CreateInputFile ${MMPBSA_DIR}
       PrepareTopologies
     
       RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                ${EQUI_TRAJ} ${VAC_COM_TOPO} ${VAC_REC_TOPO} \
-                ${VAC_LIG_TOPO}
+                "../min2_noWAT.rst7" ${VAC_COM_TOPO} \
+                ${LIG_RESIDUE_NAME}.parm7 \
+                REC.parm7
     
       cd ${WDDIR}
       log "Done rescore | ligand: ${LIG_NAME} | rep: ${REP}"
@@ -371,12 +329,12 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       cd ${MMPBSA_DIR}
       log "Current working directory: ${MMPBSA_DIR}"
       
-      ParseFiles "equi" ${LIG_NAME} ${REP}
+      CheckFiles "../noWAT_traj.nc" 
       CreateInputFile ${MMPBSA_DIR}
       PrepareTopologies 
     
       RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                ${EQUI_TRAJ} ${VAC_COM_TOPO} \
+                "../noWAT_traj.nc" ${VAC_COM_TOPO} \
                 ${LIG_RESIDUE_NAME}.parm7 \
                 REC.parm7
     
@@ -391,12 +349,12 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
       cd ${MMPBSA_DIR}
       log "Current working directory: ${MMPBSA_DIR}"
 
-      ParseFiles "prod" ${LIG_NAME} ${REP}
+      CheckFiles "../noWAT_traj.nc" 
       CreateInputFile ${MMPBSA_DIR}
       PrepareTopologies
     
       RunMMPBSA ${PARALLEL} ${CORES} ${INPUT_FILE} \
-                ${EQUI_TRAJ} ${VAC_COM_TOPO} \
+                "../noWAT_traj.nc" ${VAC_COM_TOPO} \
                 ${LIG_RESIDUE_NAME}.parm7 \
                 REC.parm7
     
