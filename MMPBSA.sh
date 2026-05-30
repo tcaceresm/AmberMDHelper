@@ -221,20 +221,19 @@ function ParseDirectory() {
 function ParseFrames() {
   # Resolves the frame window and sampling interval for MMPBSA from the CLI flags
   # (--start_frame, --last_frame, --last_n_frames, --n_frames, --interval).
-  # Reads total frame count from the trajectory using cpptraj.
-  # Sets globals: PARSED_START, PARSED_END, PARSED_INTERVAL.
-  # Outputs (global): PARSED_START, PARSED_END, PARSED_INTERVAL
-  local traj="$1"
-  local parm="$2"
+  # Sets globals: PARSED_START, PARSED_END, PARSED_INTERVAL, TOTAL_FRAMES.
+  local parm="$1"
+  local traj="$2" 
 
   log "=========================================="
   log "Parsing frames for: ${traj}"
 
-  CheckFiles "${traj}" "${parm}"
+  CheckFiles "${parm}" "${traj}"
 
   # --- 1. Detección automática del total de frames ---
   local cpptraj_stderr
   cpptraj_stderr=$(mktemp)
+
   TOTAL_FRAMES=$(cpptraj -p "${parm}" -y "${traj}" -tl 2>"${cpptraj_stderr}" | awk '{print $2}')
 
   if [[ -z "${TOTAL_FRAMES}" ]] || ! [[ "${TOTAL_FRAMES}" =~ ^[0-9]+$ ]]; then
@@ -243,6 +242,7 @@ function ParseFrames() {
     rm -f "${cpptraj_stderr}"
     exit 1
   fi
+
   rm -f "${cpptraj_stderr}"
 
   log "Total frames in trajectory : ${TOTAL_FRAMES}"
@@ -392,41 +392,31 @@ EOF
 function ClosestWaterShell() {
   # Generates a new solvated trajectory and topology keeping only the N closest water
   # molecules to the ligand (explicit-water MMPBSA).
-  # Accepts one or more solvated trajectories (sorted by name) via positional arguments after shift.
+  # Accepts one solvated trajectory.
   # Outputs: <LIG_NAME>_vac_com_CWAT.nc and <LIG_NAME>_vac_com_CWAT.parm7.
   
   local cpptraj_input=$1
   local nwat=$2
   local solvated_com_parm=$3
   local vac_lig_topo=$4
-  shift 4
-  local solv_trajs=($(echo "$@" | tr ' ' '\n' | sort -V))
+  local solv_traj=$5
 
   CheckProgram "cpptraj"
 
   log "Using ${nwat} closest waters"
   log "Obtaining new topology and trajectory."
-  log "Trajectories:"
-  for t in "${solv_trajs[@]}"; do log "  ${t}"; done
+  log "Trajectory: ${solv_traj}"
 
   cat > ${cpptraj_input} <<EOF
 parm ${solvated_com_parm}
-EOF
-
-  for t in "${solv_trajs[@]}"; do
-    cat >> ${cpptraj_input} <<EOF
-trajin ${t}
-EOF
-  done
-
-  cat >> ${cpptraj_input} <<EOF
+trajin ${solv_traj}
 
 autoimage
 
 strip :Na+,Cl-,K+,Mg*
 
-closestwaters ${nwat} :${LIG_RESIDUE_NAME} parmout ${LIG_NAME}_vac_com_CWAT.parm7
-trajout ${LIG_NAME}_vac_com_CWAT.nc
+closestwaters ${nwat} :${LIG_RESIDUE_NAME} parmout ${LIG_NAME}_vac_com_${nwat}WAT.parm7
+trajout ${LIG_NAME}_vac_com_${nwat}WAT.nc
 
 run
 EOF
@@ -454,7 +444,7 @@ function PrepareTopologies() {
     ante-MMPBSA.py -p ${vac_com_topo} \
                    -n ":${LIG_RESIDUE_NAME}" \
                    -l ${LIG_RESIDUE_NAME}.parm7 \
-                   -r REC_CWAT.parm7
+                   -r REC_${N_WAT}WAT.parm7
   fi
 
 
@@ -489,10 +479,10 @@ function RunMMPBSA() {
     local decomp_result="decomp_mmpbsa_results.data"
     local per_frame_decomp_result="per_frame_decomp_results.data"
   else
-    local result="mmpbsa_results_CW.data"
-    local per_frame_result="per_frame_mmpbsa_results_CW.data"
-    local decomp_result="decomp_mmpbsa_results_CW.data"
-    local per_frame_decomp_result="per_frame_decomp_results_CW.data"
+    local result="mmpbsa_results_${N_WAT}WAT.data"
+    local per_frame_result="per_frame_mmpbsa_results_${N_WAT}WAT.data"
+    local decomp_result="decomp_mmpbsa_results_${N_WAT}WAT.data"
+    local per_frame_decomp_result="per_frame_decomp_results_${N_WAT}WAT.data"
 
   fi
     log "=========================================="
@@ -532,8 +522,7 @@ function RunMode() {
   #   $@ solv_trajs: one or more solvated trajectories (used when N_WAT>0 to compute solvation shell)
   local mode=$1
   local dry_traj=$2
-  shift 2
-  local solv_trajs=("$@")
+  local solv_traj=$3
 
   log "=========================================="
   log "Doing ${mode} MMPBSA | ligand: ${LIG_NAME} | rep: ${REP}"
@@ -543,10 +532,10 @@ function RunMode() {
   GetLigName "${VAC_LIG_TOPO}"
   log "Current working directory: ${MMPBSA_DIR}"
 
-  ParseFrames "${dry_traj}" "${VAC_COM_TOPO}"
-  CreateInputFile "${MMPBSA_DIR}" "${PARSED_START}" "${PARSED_END}" "${PARSED_INTERVAL}"
-
   if [[ ${N_WAT} -eq 0 ]]; then
+
+    ParseFrames "${VAC_COM_TOPO}" "${dry_traj}"
+    CreateInputFile "${MMPBSA_DIR}" "${PARSED_START}" "${PARSED_END}" "${PARSED_INTERVAL}"
 
     PrepareTopologies "${VAC_LIG_TOPO}" "${VAC_COM_TOPO}"
 
@@ -555,6 +544,9 @@ function RunMode() {
               REC.parm7 "${LIG_RESIDUE_NAME}.parm7"
 
   else
+
+    ParseFrames "${SOLV_COM_PARM}" "${solv_traj}"
+    CreateInputFile "${MMPBSA_DIR}" "${PARSED_START}" "${PARSED_END}" "${PARSED_INTERVAL}"
 
     # GetSolvationShell "solvation_shell.in" \
     #                   "${solv_trajs[@]}" \
@@ -565,14 +557,25 @@ function RunMode() {
                       "${N_WAT}" \
                       "${SOLV_COM_PARM}" \
                       "${VAC_LIG_TOPO}" \
-                      "${solv_trajs[@]}"
+                      "${solv_traj}"
 
-    PrepareTopologies "${VAC_LIG_TOPO}" "${LIG_NAME}_vac_com_CWAT.parm7"
+    # Verify CWAT trajectory frame count matches the solvated trajectories
+    local cwat_traj="${LIG_NAME}_vac_com_${N_WAT}WAT.nc"
+    local cwat_parm="${LIG_NAME}_vac_com_${N_WAT}WAT.parm7"
+    local cwat_frames
+    cwat_frames=$(cpptraj -p "${cwat_parm}" -y "${cwat_traj}" -tl 2>/dev/null | awk '{print $2}')
+    if [[ "${cwat_frames}" -ne "${TOTAL_FRAMES}" ]]; then
+      log "Error: CWAT trajectory frames (${cwat_frames}) differ from solvated trajectory frames (${TOTAL_FRAMES})."
+      exit 1
+    fi
+    log "CWAT trajectory frame count verified: ${cwat_frames} frames."
+
+    PrepareTopologies "${VAC_LIG_TOPO}" "${cwat_parm}"
 
     RunMMPBSA "${PARALLEL}" "${CORES}" "${INPUT_FILE}" \
-              "${LIG_NAME}_vac_com_CWAT.nc" \
-              "${LIG_NAME}_vac_com_CWAT.parm7" \
-              REC_CWAT.parm7 "${LIG_RESIDUE_NAME}.parm7"
+              "${cwat_traj}" \
+              "${cwat_parm}" \
+              "REC_${N_WAT}WAT.parm7" "${LIG_RESIDUE_NAME}.parm7"
 
   fi
 
@@ -595,12 +598,10 @@ MAIN_LOG="${LOG_DIR}/mmpbsa.log"
 
 CLIflags
 
-shopt -s nullglob
 LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
-shopt -u nullglob
 
-if [ ${#LIGANDS_PATH[@]} -eq 0 ]; then
-  echo "Error: ligands folder is empty."
+if [[ ! -f "${LIGANDS_PATH[0]}" ]]; then
+  log "Error: --prot_lig is 1 but ligands folder is empty."
   exit 1
 fi
 
@@ -626,11 +627,11 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     fi
 
     if [ ${RUN_EQUI} -eq 1 ]; then
-      RunMode "equi" "../noWAT_traj.nc" "../md_nvt_ntr.nc" ../*npt_equil*.nc
+      RunMode "equi" "../equi_noWAT.nc" "../equi_WAT.nc"
     fi
 
     if [ ${RUN_PROD} -eq 1 ]; then
-      RunMode "prod" "../noWAT_traj.nc" "../md_prod.nc"
+      RunMode "prod" "../prod_noWAT.nc" "../prod_WAT.nc"
     fi
 
   done
