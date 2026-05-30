@@ -8,14 +8,8 @@
 
 #set -x
 
-# To do: 
-#        1. Add options for mmpbsa input file (mmpbsa.py)
-#        2. Add a option to modify PBRadii.
-#           Instead of relying only in one topology file (the one created with setupMD script),            
-#           add an option to modify that topology, and create a new one using a specific PBRadii.
-#           This new topo file is the one used in MM/PBSA calculations, and it should be inside mmpbsa folder, not topo folder.
-
 function ScriptInfo() {
+  # Prints script version, author, and lab information.
   DATE="2025"
   VERSION="0.0.1"
   GH_URL="https://github.com/tcaceresm/AmberMDHelper"
@@ -33,7 +27,9 @@ function ScriptInfo() {
 EOF
 }
 
+
 Help() {
+  # Prints usage instructions and all available CLI options.
   ScriptInfo
   cat <<EOF
 
@@ -56,11 +52,11 @@ Optional:
  --n_wat            <integer>    (default=0) For explicit-water MM/PBSA. Keep the N closest water molecules to the ligand.
  --start_frame      <integer>    (default=1) The first frame read by MMPBSA.
  --last_frame       <integer>    The last frame read by MMPBSA. Default is LASTFRAME of trajectory and its automatically calcualted.
- --interval         <integer>    Step between frames read by MMPBSA. Cannot be used with --n_frames.
+ --interval         <integer>    Step between frames read by MMPBSA. Mutually exclusive with --n_frames.
  --n_frames         <integer>    N evenly spaced frames, from --start_frame to --end_frame, to be used by MMPBSA.
                                  Default is to use all available frames.
  --last_n_frames    <integer>    Use only the last N frames of the available window (defined by --start_frame and --last_frame).
-                                 Applied after the window is resolved. Cannot be used with with --n_frames.
+                                 Applied after the window is resolved. Mutually exclusive with --n_frames.
  -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
  --start_replica    <integer>    (default=1) Run from --start_replica to --replicas.
  --parallel         <0|1>        (default=0) Use MMPBSA.py.MPI to run parallel calculations.
@@ -113,17 +109,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -n "${INTERVAL}" ] && [ -n "${N_FRAMES}" ]; then
-  echo "Error: --interval and --n_frames cannot be used together. Use one or the other."
+  echo "Error: --interval and --n_frames are mutually exclusive. Use one or the other."
   exit 1
 fi
 
 if [ -n "${LAST_N_FRAMES}" ] && [ -n "${N_FRAMES}" ]; then
-  echo "Error: --last_n_frames and --n_frames cannot be used together. Use one or the other."
+  echo "Error: --last_n_frames and --n_frames are mutually exclusive. Use one or the other."
   exit 1
 fi
 
 function CheckProgram() {
-  # Check if command is available
+  # Verifies that one or more programs are available in PATH. Exits with error if any is missing.
   for COMMAND in "$@"; do
     if ! command -v ${COMMAND} >/dev/null 2>&1; then
       echo "Error: ${COMMAND} program not available, exiting."
@@ -133,7 +129,7 @@ function CheckProgram() {
 }
 
 function CheckFiles() {
-  # Check existence of files
+  # Verifies that one or more files exist on disk. Exits with error if any is missing.
   for ARG in "$@"; do
     if [ ! -f "${ARG}" ]; then
       echo "Error: ${ARG} file doesn't exist."
@@ -143,7 +139,7 @@ function CheckFiles() {
 }
 
 function CheckVariable() {
-  # Check if variable is empty or not defined.
+  # Verifies that one or more global variables are defined and non-empty. Exits with error if any is unset.
   local var_name var_value
   for var_name in "$@"; do
     var_value="${!var_name}"  # indirección: obtiene el valor por nombre
@@ -155,6 +151,8 @@ function CheckVariable() {
 }
 
 function CLIflags() {
+  # Logs all resolved CLI flag values at the start of execution, for traceability.
+
   log "=========================================="
   log "Starting MMPBSA"
   log "CLI flags:"
@@ -180,6 +178,8 @@ function CLIflags() {
 }
 
 function log() {
+  # Writes a timestamped message to stdout and appends it to the main log file.
+  # Multi-line messages are indented to align with the first line.
   local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
   local first_line=1
   local padding=""
@@ -198,7 +198,10 @@ function log() {
   done | tee -a "${MAIN_LOG}"
 }
 
+
 function ParseDirectory() {
+  # Resolves and creates the output directory for a given run mode (rescore, equi, prod).
+  # Sets the global MMPBSA_DIR used by subsequent functions.
   local mode=$1
   local lig=$2
   local rep=$3
@@ -214,7 +217,12 @@ function ParseDirectory() {
 
 }
 
+
 function ParseFrames() {
+  # Resolves the frame window and sampling interval for MMPBSA from the CLI flags
+  # (--start_frame, --last_frame, --last_n_frames, --n_frames, --interval).
+  # Reads total frame count from the trajectory using cpptraj.
+  # Sets globals: PARSED_START, PARSED_END, PARSED_INTERVAL.
   # Outputs (global): PARSED_START, PARSED_END, PARSED_INTERVAL
   local traj="$1"
   local parm="$2"
@@ -309,7 +317,8 @@ function ParseFrames() {
 
 
 function CreateInputFile() {
-  # MM/PBSA input file
+  # Writes the MMPBSA.py input file (mm_pbsa.in) with the resolved frame window.
+  # Includes PB and per-residue decomposition settings.
   local mmpbsa_dir=$1
   local start_frame=$2
   local end_frame=$3
@@ -331,6 +340,8 @@ EOF
 }
 
 function GetLigName() {
+  # Extracts the residue name of the ligand from its vacuum topology using cpptraj.
+  # Sets the global LIG_RESIDUE_NAME.
   local lig_topo=$1
   log "=========================================="
   log "Obtaining ligand residue name"
@@ -342,9 +353,9 @@ function GetLigName() {
 }
 
 function GetSolvationShell() {
-  # This option will count the number of waters within a 
-  # certain distance of the atoms in the ligand in order to
-  # represent the first and second solvation shells
+  # Counts water molecules within 3.4–5.0 Å of the ligand across the trajectory
+  # to estimate first and second solvation shell occupancy.
+  # Writes average occupancy to AverageSecondWS.data. Currently unused (replaced by ClosestWaterShell).
 
   local cpptraj_input=$1
   local solvated_com_traj=$2
@@ -379,32 +390,36 @@ EOF
 }
 
 function ClosestWaterShell() {
+  # Generates a new solvated trajectory and topology keeping only the N closest water
+  # molecules to the ligand (explicit-water MMPBSA).
+  # Accepts one or more solvated trajectories (sorted by name) via positional arguments after shift.
+  # Outputs: <LIG_NAME>_vac_com_CWAT.nc and <LIG_NAME>_vac_com_CWAT.parm7.
+  
   local cpptraj_input=$1
   local nwat=$2
-  local solvated_com_traj=$3
-  local solvated_com_parm=$4
-  local vac_lig_topo=$5
+  local solvated_com_parm=$3
+  local vac_lig_topo=$4
+  shift 4
+  local solv_trajs=($(echo "$@" | tr ' ' '\n' | sort -V))
 
   CheckProgram "cpptraj"
-  CheckFiles AverageSecondWS.data
 
-  # log "=========================================="
-  # log "Obtaining number of wat molecules"
-
-  # local avg_wat=$(awk 'NR==2 {print $2}' AverageSecondWS.data)
-
-  # # Round to nearest integer
-  # local nwat=$(printf "%.0f" "${avg_wat}")
-
-  # log "Average second shell occupancy = ${avg_wat}"
   log "Using ${nwat} closest waters"
-  log " Obtaining new topology and trajectory."
-
-  #GetLigName ${vac_lig_topo}
+  log "Obtaining new topology and trajectory."
+  log "Trajectories:"
+  for t in "${solv_trajs[@]}"; do log "  ${t}"; done
 
   cat > ${cpptraj_input} <<EOF
 parm ${solvated_com_parm}
-trajin ${solvated_com_traj}
+EOF
+
+  for t in "${solv_trajs[@]}"; do
+    cat >> ${cpptraj_input} <<EOF
+trajin ${t}
+EOF
+  done
+
+  cat >> ${cpptraj_input} <<EOF
 
 autoimage
 
@@ -420,9 +435,8 @@ EOF
 }
 
 function PrepareTopologies() {
-  # Wrapper to ante-MMPBSA.py
-  # We remove LIG from COM topology.
-  # Everything else is considered the "receptor".
+  # Splits the complex topology into receptor and ligand topologies using ante-MMPBSA.py.
+  # If N_WAT=0, produces REC.parm7; if N_WAT>0 (explicit water), produces REC_CWAT.parm7.
 
   local vac_lig_topo=$1
   local vac_com_topo=$2
@@ -448,8 +462,8 @@ function PrepareTopologies() {
 }
 
 function RunMMPBSA() {
-  # Run mmpbsa
-  # Two options: serial and cpu parallelized using mpi
+  # Executes MMPBSA.py (serial) or MMPBSA.py.MPI (parallel) with the given topology and trajectory.
+  # Output filenames differ depending on whether explicit waters are included (N_WAT>0).
   local parallel=$1
   local cores=$2
   local input_file=$3
@@ -508,12 +522,18 @@ function RunMMPBSA() {
 }
 
 function RunMode() {
-  # Runs MM/PBSA for a given mode (rescore, equi, prod).
-  # dry_traj  : desolvated trajectory or structure (used when KEEP_WATERS=0)
-  # solv_traj : solvated trajectory (used when KEEP_WATERS!=0 to compute solvation shell)
+  # Orchestrates a full MMPBSA run for a given mode (rescore, equi, or prod).
+  # Resolves directories and frames, prepares topologies, optionally extracts the
+  # closest water shell, and calls MMPBSA.py.
+  #
+  # Args:
+  #   $1 mode      : rescore | equi | prod
+  #   $2 dry_traj  : desolvated trajectory or structure (used when N_WAT=0)
+  #   $@ solv_trajs: one or more solvated trajectories (used when N_WAT>0 to compute solvation shell)
   local mode=$1
   local dry_traj=$2
-  local solv_traj=$3
+  shift 2
+  local solv_trajs=("$@")
 
   log "=========================================="
   log "Doing ${mode} MMPBSA | ligand: ${LIG_NAME} | rep: ${REP}"
@@ -537,15 +557,15 @@ function RunMode() {
   else
 
     # GetSolvationShell "solvation_shell.in" \
-    #                   "${solv_traj}" \
+    #                   "${solv_trajs[@]}" \
     #                   "${SOLV_COM_PARM}" \
     #                   "${VAC_LIG_TOPO}"
 
     ClosestWaterShell "closest_water.in" \
                       "${N_WAT}" \
-                      "${solv_traj}" \
                       "${SOLV_COM_PARM}" \
-                      "${VAC_LIG_TOPO}"
+                      "${VAC_LIG_TOPO}" \
+                      "${solv_trajs[@]}"
 
     PrepareTopologies "${VAC_LIG_TOPO}" "${LIG_NAME}_vac_com_CWAT.parm7"
 
@@ -606,7 +626,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     fi
 
     if [ ${RUN_EQUI} -eq 1 ]; then
-      RunMode "equi" "../noWAT_traj.nc" "../npt_equil_6.nc"
+      RunMode "equi" "../noWAT_traj.nc" "../md_nvt_ntr.nc" ../*npt_equil*.nc
     fi
 
     if [ ${RUN_PROD} -eq 1 ]; then
