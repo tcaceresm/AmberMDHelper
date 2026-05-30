@@ -56,9 +56,11 @@ Optional:
  --n_wat            <integer>    (default=0) For explicit-water MM/PBSA. Keep the N closest water molecules to the ligand.
  --start_frame      <integer>    (default=1) The first frame read by MMPBSA.
  --last_frame       <integer>    The last frame read by MMPBSA. Default is LASTFRAME of trajectory and its automatically calcualted.
- --interval         <integer>    Step between frames read by MMPBSA. Mutually exclusive with --n_frames.
+ --interval         <integer>    Step between frames read by MMPBSA. Cannot be used with --n_frames.
  --n_frames         <integer>    N evenly spaced frames, from --start_frame to --end_frame, to be used by MMPBSA.
                                  Default is to use all available frames.
+ --last_n_frames    <integer>    Use only the last N frames of the available window (defined by --start_frame and --last_frame).
+                                 Applied after the window is resolved. Cannot be used with with --n_frames.
  -n, --replicas     <integer>    (default=3) Number of replicas or repetitions.
  --start_replica    <integer>    (default=1) Run from --start_replica to --replicas.
  --parallel         <0|1>        (default=0) Use MMPBSA.py.MPI to run parallel calculations.
@@ -99,6 +101,7 @@ while [[ $# -gt 0 ]]; do
   '--last_frame'             ) shift ; LAST_FRAME=$1 ;;
   '--interval'               ) shift ; INTERVAL=$1 ;;
   '--n_frames'               ) shift ; N_FRAMES=$1 ;;
+  '--last_n_frames'          ) shift ; LAST_N_FRAMES=$1 ;;
   '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
   '--start_replica'          ) shift ; START_REPLICA=$1 ;;
   '--parallel'               ) shift ; PARALLEL=$1 ;;
@@ -110,7 +113,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -n "${INTERVAL}" ] && [ -n "${N_FRAMES}" ]; then
-  echo "Error: --interval and --n_frames are mutually exclusive. Use one or the other."
+  echo "Error: --interval and --n_frames cannot be used together. Use one or the other."
+  exit 1
+fi
+
+if [ -n "${LAST_N_FRAMES}" ] && [ -n "${N_FRAMES}" ]; then
+  echo "Error: --last_n_frames and --n_frames cannot be used together. Use one or the other."
   exit 1
 fi
 
@@ -159,6 +167,7 @@ function CLIflags() {
   log " --start_frame     : ${START_FRAME}"
   log " --last_frame      : ${LAST_FRAME:-(auto)}"
   log " --n_frames        : ${N_FRAMES:-(all)}"
+  log " --last_n_frames   : ${LAST_N_FRAMES:-(none)}"
   log " --replicas        : ${REPLICAS}"
   log " --start_replica   : ${START_REPLICA}"
   log " --parallel        : ${PARALLEL}"
@@ -235,7 +244,7 @@ function ParseFrames() {
 
   if [[ -n "${LAST_FRAME}" ]]; then
     if [[ "${LAST_FRAME}" -gt "${TOTAL_FRAMES}" ]]; then
-      log "Warning: --last_frame (${LAST_FRAME}) exceeds total frames (${TOTAL_FRAMES}). Using total frames: ${TOTAL_FRAMES}."
+      log "Warning: --last_frame (${LAST_FRAME}) exceeds total frames (${TOTAL_FRAMES}). Using ${TOTAL_FRAMES}."
       PARSED_END="${TOTAL_FRAMES}"
     else
       PARSED_END="${LAST_FRAME}"
@@ -250,7 +259,17 @@ function ParseFrames() {
     exit 1
   fi
 
-  # --- 3. Cálculo del INTERVAL ---
+  # --- 3. Recorte de ventana con --last_n_frames ---
+  if [[ -n "${LAST_N_FRAMES}" ]]; then
+    local available_frames=$(( PARSED_END - PARSED_START + 1 ))
+    if [[ "${LAST_N_FRAMES}" -ge "${available_frames}" ]]; then
+      log "Warning: --last_n_frames (${LAST_N_FRAMES}) >= available frames (${available_frames}). Using the full window."
+    else
+      PARSED_START=$(( PARSED_END - LAST_N_FRAMES + 1 ))
+    fi
+  fi
+
+  # --- 4. Cálculo del INTERVAL ---
   local available_frames=$(( PARSED_END - PARSED_START + 1 ))
   local n_frames_val="${N_FRAMES:-0}"
 
@@ -265,7 +284,6 @@ function ParseFrames() {
       PARSED_INTERVAL="${INTERVAL}"
     fi
   elif [[ "${n_frames_val}" -eq 1 ]]; then
-    #log "Warning: --n_frames=1. Only 1 frame will be used: frame ${PARSED_END}."
     PARSED_START="${PARSED_END}"
     PARSED_INTERVAL=1
   elif [[ "${n_frames_val}" -gt 1 ]]; then
@@ -280,7 +298,7 @@ function ParseFrames() {
     PARSED_INTERVAL=1
   fi
 
-  # --- 4. Log del resumen ---
+  # --- 5. Log del resumen ---
   local frames_used=$(( (PARSED_END - PARSED_START) / PARSED_INTERVAL + 1 ))
   log "start_frame  : ${PARSED_START}"
   log "end_frame    : ${PARSED_END}"
@@ -320,7 +338,6 @@ function GetLigName() {
   CheckProgram "cpptraj"
   LIG_RESIDUE_NAME=$(cpptraj -p ${lig_topo} --resmask \* | tail -n 1 | awk '{print $2}')
   CheckVariable "LIG_RESIDUE_NAME"
-  log "Ligand residue name is ${LIG_RESIDUE_NAME}"
   log "=========================================="
 }
 
@@ -369,7 +386,7 @@ function ClosestWaterShell() {
   local vac_lig_topo=$5
 
   CheckProgram "cpptraj"
-  #CheckFiles AverageSecondWS.data
+  CheckFiles AverageSecondWS.data
 
   # log "=========================================="
   # log "Obtaining number of wat molecules"
