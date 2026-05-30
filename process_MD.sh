@@ -71,6 +71,7 @@ PROCESS_PROD=1
 PROCESS_RMSD=1
 PROCESS_WAT=1
 PROCESS_THERMO=1
+MMPBSA_RESCORE=0
 PROCESS_IHBOND=0
 REPLICAS=3
 START_REPLICA=1
@@ -243,7 +244,7 @@ EOF
       cat >> ${dir}/rmsd.in <<EOF
 rms ref [minimized_pose] out ${LIG_NAME}_rmsd_LIG_noWAT_test.data :${TOTALRES}&!@H= nofit
 EOF
-  fi
+    fi
 
   fi
   cat >> ${dir}/rmsd.in <<EOF
@@ -412,7 +413,7 @@ CheckProgram "cpptraj"
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
   echo -e "\n Doing replica: ${REP}"
 
-  if [[ -z ${PROCESS_PROT_ONLY} || -z ${PROCESS_PROT_LIG} ]]; then
+  if [[ ${PROCESS_PROT_ONLY} -eq 0 && ${PROCESS_PROT_LIG} -eq 0 ]]; then
     echo "Error: Must provide --prot_only or --prot_lig options."
     echo "Check help with --help."
     exit 1
@@ -430,7 +431,7 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     
     LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
     
-    if [[ ${#LIGANDS_PATH[@]} -eq 0 ]]; then
+    if [[ ! -f "${LIGANDS_PATH[0]}" ]]; then
       echo "Error: --prot_lig is 1 but ligands folder is empty."
       exit 1
     fi
