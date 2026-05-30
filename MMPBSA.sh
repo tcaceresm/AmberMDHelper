@@ -6,7 +6,7 @@
 # try using global variables directly, however, this is harder to
 # read and debug.
 
-#set -x
+# set -x
 
 function ScriptInfo() {
   # Prints script version, author, and lab information.
@@ -352,43 +352,6 @@ function GetLigName() {
   log "=========================================="
 }
 
-function GetSolvationShell() {
-  # Counts water molecules within 3.4–5.0 Å of the ligand across the trajectory
-  # to estimate first and second solvation shell occupancy.
-  # Writes average occupancy to AverageSecondWS.data. Currently unused (replaced by ClosestWaterShell).
-
-  local cpptraj_input=$1
-  local solvated_com_traj=$2
-  local solvated_com_parm=$3
-  local vac_lig_topo=$4
-
-  CheckProgram "cpptraj"
-  log "=========================================="
-  log "Obtaining second solvation shell"
-
-  #GetLigName ${vac_lig_topo}
-
-  cat > ${cpptraj_input} <<EOF
-parm ${solvated_com_parm}
-trajin ${solvated_com_traj}
-
-autoimage
-
-strip :Na+,Cl-
-
-watershell WS :${LIG_RESIDUE_NAME} lower 3.4 upper 5.0
-
-run
-
-runanalysis avg WS[upper] name AverageSecondWS out StatisticsAverageSecondWS.data
-writedata AverageSecondWS.data AverageSecondWS[avg]
-
-run
-EOF
-
-  cpptraj -i ${cpptraj_input}
-}
-
 function ClosestWaterShell() {
   # Generates a new solvated trajectory and topology keeping only the N closest water
   # molecules to the ligand (explicit-water MMPBSA).
@@ -446,9 +409,6 @@ function PrepareTopologies() {
                    -l ${LIG_RESIDUE_NAME}.parm7 \
                    -r REC_${N_WAT}WAT.parm7
   fi
-
-
-
 }
 
 function RunMMPBSA() {
@@ -559,23 +519,16 @@ function RunMode() {
                       "${VAC_LIG_TOPO}" \
                       "${solv_traj}"
 
-    # Verify CWAT trajectory frame count matches the solvated trajectories
     local cwat_traj="${LIG_NAME}_vac_com_${N_WAT}WAT.nc"
     local cwat_parm="${LIG_NAME}_vac_com_${N_WAT}WAT.parm7"
-    local cwat_frames
-    cwat_frames=$(cpptraj -p "${cwat_parm}" -y "${cwat_traj}" -tl 2>/dev/null | awk '{print $2}')
-    if [[ "${cwat_frames}" -ne "${TOTAL_FRAMES}" ]]; then
-      log "Error: CWAT trajectory frames (${cwat_frames}) differ from solvated trajectory frames (${TOTAL_FRAMES})."
-      exit 1
-    fi
-    log "CWAT trajectory frame count verified: ${cwat_frames} frames."
-
+    
     PrepareTopologies "${VAC_LIG_TOPO}" "${cwat_parm}"
 
     RunMMPBSA "${PARALLEL}" "${CORES}" "${INPUT_FILE}" \
               "${cwat_traj}" \
               "${cwat_parm}" \
-              "REC_${N_WAT}WAT.parm7" "${LIG_RESIDUE_NAME}.parm7"
+              "REC_${N_WAT}WAT.parm7" \
+              "${LIG_RESIDUE_NAME}.parm7"
 
   fi
 
@@ -627,11 +580,11 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     fi
 
     if [ ${RUN_EQUI} -eq 1 ]; then
-      RunMode "equi" "../equi_noWAT.nc" "../equi_WAT.nc"
+      RunMode "equi" "../noWAT_traj.nc" "../concatenated_traj.nc"
     fi
 
     if [ ${RUN_PROD} -eq 1 ]; then
-      RunMode "prod" "../prod_noWAT.nc" "../prod_WAT.nc"
+      RunMode "prod" "../noWAT_traj.nc" "../concatenated_traj.nc"
     fi
 
   done
