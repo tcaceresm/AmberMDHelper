@@ -166,7 +166,6 @@ function CLIflags() {
   log "Receptor           : ${RECEPTOR_NAME}"
   log "Working directory  : ${WDDIR}"
   log "Replicas           : ${START_REPLICA} to ${REPLICAS}"
-  log "Run equi           : ${RUN_EQUI} | Run prod: ${RUN_PROD} | Run rescore: ${RUN_RESCORE}"
   log "Log file           : ${MAIN_LOG}"
   log "=========================================="
 }
@@ -207,55 +206,86 @@ function ParseDirectory() {
 }
 
 function ParseFrames() {
-  local traj=$1
-  local parm=$2
+  # Outputs (global): PARSED_START, PARSED_END, PARSED_INTERVAL
+  local traj="$1"
+  local parm="$2"
 
   log "=========================================="
-  log "Parsing frames"
+  log "Parsing frames for: ${traj}"
 
-  # --- Total frames in trajectory ---
-  TOTAL_FRAMES=$(cpptraj -p ${parm} -y ${traj} -tl 2>/dev/null | awk '{print $2}')
+  CheckFiles "${traj}" "${parm}"
 
-  if [ -z "${TOTAL_FRAMES}" ]; then
-    log "Error: could not read frames from '${traj}' using topology '${parm}'."
-    log "       Check that both files exist and are valid."
+  # --- 1. Detección automática del total de frames ---
+  local cpptraj_stderr
+  cpptraj_stderr=$(mktemp)
+  TOTAL_FRAMES=$(cpptraj -p "${parm}" -y "${traj}" -tl 2>"${cpptraj_stderr}" | awk '{print $2}')
+
+  if [[ -z "${TOTAL_FRAMES}" ]] || ! [[ "${TOTAL_FRAMES}" =~ ^[0-9]+$ ]]; then
+    log "Error: could not read valid frames from '${traj}' using topology '${parm}'."
+    log "cpptraj output: $(cat "${cpptraj_stderr}")"
+    rm -f "${cpptraj_stderr}"
     exit 1
   fi
+  rm -f "${cpptraj_stderr}"
 
   log "Total frames in trajectory : ${TOTAL_FRAMES}"
 
-  # --- Resolve LAST_FRAME ---
-  # If not provided by the user, default to the last frame of the trajectory.
-  if [ -z "${LAST_FRAME}" ]; then
-    LAST_FRAME=${TOTAL_FRAMES}
-  elif [ ${LAST_FRAME} -gt ${TOTAL_FRAMES} ]; then
-    log "Error: --last_frame (${LAST_FRAME}) exceeds trajectory length (${TOTAL_FRAMES})."
-    exit 1
-  fi
+  # --- 2. Asignación de START y LAST frame ---
+  PARSED_START="${START_FRAME:-1}"
 
-  # --- Sanity check: start must be before end ---
-  if [ ${START_FRAME} -gt ${LAST_FRAME} ]; then
-    log "Error: --start_frame (${START_FRAME}) is greater than --last_frame (${LAST_FRAME})."
-    exit 1
-  fi
-
-  # --- Resolve INTERVAL ---
-  # Priority: --interval (direct) > derived from --n_frames > default (1 = every frame).
-  if [ -n "${INTERVAL}" ]; then
-    : # user set --interval directly, nothing to do
-  elif [ ${N_FRAMES:-0} -gt 1 ]; then
-    INTERVAL=$(( (LAST_FRAME - START_FRAME) / (N_FRAMES - 1) ))
-    if [ ${INTERVAL} -lt 1 ]; then
-      INTERVAL=1
-      log "Warning: --n_frames (${N_FRAMES}) is greater than the available frames in range ${START_FRAME}-${LAST_FRAME}. Using all available frames (interval=1)."
+  if [[ -n "${LAST_FRAME}" ]]; then
+    if [[ "${LAST_FRAME}" -gt "${TOTAL_FRAMES}" ]]; then
+      log "Warning: --last_frame (${LAST_FRAME}) exceeds total frames (${TOTAL_FRAMES}). Using total frames: ${TOTAL_FRAMES}."
+      PARSED_END="${TOTAL_FRAMES}"
+    else
+      PARSED_END="${LAST_FRAME}"
     fi
   else
-    INTERVAL=1
+    PARSED_END="${TOTAL_FRAMES}"
   fi
 
-  log "start_frame : ${START_FRAME}"
-  log "end_frame   : ${LAST_FRAME}"
-  log "interval    : ${INTERVAL}"
+  # Sanity check
+  if [[ "${PARSED_START}" -gt "${PARSED_END}" ]]; then
+    log "Error: --start_frame (${PARSED_START}) is greater than end_frame (${PARSED_END})."
+    exit 1
+  fi
+
+  # --- 3. Cálculo del INTERVAL ---
+  local available_frames=$(( PARSED_END - PARSED_START + 1 ))
+  local n_frames_val="${N_FRAMES:-0}"
+
+  if [[ -n "${INTERVAL}" ]]; then
+    # Caso 5: --interval mayor que los frames disponibles → usar solo PARSED_END
+    if [[ "${INTERVAL}" -ge "${available_frames}" ]]; then
+      log "Warning: --interval (${INTERVAL}) >= available frames (${available_frames})."
+      log "         Only 1 frame will be used: frame ${PARSED_END}."
+      PARSED_START="${PARSED_END}"
+      PARSED_INTERVAL=1
+    else
+      PARSED_INTERVAL="${INTERVAL}"
+    fi
+  elif [[ "${n_frames_val}" -eq 1 ]]; then
+    #log "Warning: --n_frames=1. Only 1 frame will be used: frame ${PARSED_END}."
+    PARSED_START="${PARSED_END}"
+    PARSED_INTERVAL=1
+  elif [[ "${n_frames_val}" -gt 1 ]]; then
+    if [[ "${n_frames_val}" -gt "${available_frames}" ]]; then
+      # Caso 4: --n_frames mayor que frames disponibles → usar todos los frames
+      log "Warning: --n_frames (${n_frames_val}) exceeds available frames (${available_frames}). Using all available frames with interval=1."
+      PARSED_INTERVAL=1
+    else
+      PARSED_INTERVAL=$(( (PARSED_END - PARSED_START) / (n_frames_val - 1) ))
+    fi
+  else
+    PARSED_INTERVAL=1
+  fi
+
+  # --- 4. Log del resumen ---
+  local frames_used=$(( (PARSED_END - PARSED_START) / PARSED_INTERVAL + 1 ))
+  log "start_frame  : ${PARSED_START}"
+  log "end_frame    : ${PARSED_END}"
+  log "interval     : ${PARSED_INTERVAL}"
+  log "frames used  : ${frames_used}"
   log "=========================================="
 }
 
@@ -290,6 +320,7 @@ function GetLigName() {
   CheckProgram "cpptraj"
   LIG_RESIDUE_NAME=$(cpptraj -p ${lig_topo} --resmask \* | tail -n 1 | awk '{print $2}')
   CheckVariable "LIG_RESIDUE_NAME"
+  log "Ligand residue name is ${LIG_RESIDUE_NAME}"
   log "=========================================="
 }
 
@@ -338,7 +369,7 @@ function ClosestWaterShell() {
   local vac_lig_topo=$5
 
   CheckProgram "cpptraj"
-  CheckFiles AverageSecondWS.data
+  #CheckFiles AverageSecondWS.data
 
   # log "=========================================="
   # log "Obtaining number of wat molecules"
@@ -476,7 +507,7 @@ function RunMode() {
   log "Current working directory: ${MMPBSA_DIR}"
 
   ParseFrames "${dry_traj}" "${VAC_COM_TOPO}"
-  CreateInputFile "${MMPBSA_DIR}" "${START_FRAME}" "${LAST_FRAME}" "${INTERVAL}"
+  CreateInputFile "${MMPBSA_DIR}" "${PARSED_START}" "${PARSED_END}" "${PARSED_INTERVAL}"
 
   if [[ ${N_WAT} -eq 0 ]]; then
 
