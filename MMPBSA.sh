@@ -479,7 +479,8 @@ function RunMode() {
   # Args:
   #   $1 mode      : rescore | equi | prod
   #   $2 dry_traj  : desolvated trajectory or structure (used when N_WAT=0)
-  #   $@ solv_trajs: one or more solvated trajectories (used when N_WAT>0 to compute solvation shell)
+  #   $3 solv_traj : solvated trajectory (used when N_WAT>0 to compute solvation shell)
+
   local mode=$1
   local dry_traj=$2
   local solv_traj=$3
@@ -518,15 +519,12 @@ function RunMode() {
                       "${SOLV_COM_PARM}" \
                       "${VAC_LIG_TOPO}" \
                       "${solv_traj}"
-
-    local cwat_traj="${LIG_NAME}_vac_com_${N_WAT}WAT.nc"
-    local cwat_parm="${LIG_NAME}_vac_com_${N_WAT}WAT.parm7"
     
     PrepareTopologies "${VAC_LIG_TOPO}" "${cwat_parm}"
 
     RunMMPBSA "${PARALLEL}" "${CORES}" "${INPUT_FILE}" \
-              "${cwat_traj}" \
-              "${cwat_parm}" \
+              "${LIG_NAME}_vac_com_${N_WAT}WAT.nc" \
+              "${LIG_NAME}_vac_com_${N_WAT}WAT.parm7" \
               "REC_${N_WAT}WAT.parm7" \
               "${LIG_RESIDUE_NAME}.parm7"
 
