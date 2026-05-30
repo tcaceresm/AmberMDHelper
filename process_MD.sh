@@ -102,16 +102,61 @@ while [[ $# -gt 0 ]]; do
     '--hbond'                  ) shift ; PROCESS_IHBOND=$1 ;;
     '-n' | '--replicas'        ) shift ; REPLICAS=$1 ;;
     '--start_replica'          ) shift ; START_REPLICA=$1 ;;
-    *                          ) echo "Unrecognized command line option: $1" >> /dev/stderr ; exit 1 ;;
+    *                          ) echo "Unrecognized command line option: $1" ; exit 1 ;;
   esac
   shift
 done
+
+
+function log() {
+  local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
+  local first_line=1
+  local padding=""
+  echo "$*" | while IFS= read -r line; do
+  # Strip leading whitespace
+  line="${line#"${line%%[![:space:]]*}"}"
+  if [[ ${first_line} -eq 1 ]]; then
+    echo "${timestamp} ${line}"
+    local prefix="${timestamp} "
+    local before_flag="${line%%-*}"
+    padding="${prefix//?/ }${before_flag//?/ }"
+    first_line=0
+  else
+    echo "${padding}${line}"
+  fi
+
+  done | tee -a "${MAIN_LOG}"
+}
+
+function CLIflags() {
+  # Display CLI flags in log file.
+  log "=========================================="
+  log "Starting process_MD"
+  log "CLI flags:"
+  log " --work_dir      : ${WDDIR}"
+  log " --prot_only     : ${PROCESS_PROT_ONLY}"
+  log " --prot_lig      : ${PROCESS_PROT_LIG}"
+  log " --equi          : ${PROCESS_EQUI}"
+  log " --prod          : ${PROCESS_PROD}"
+  log " --rmsd          : ${PROCESS_RMSD}"
+  log " --rmsd_mask     : ${MASK:-:1-TOTALRES@CA,C,N} --> (default)"
+  log " --dry           : ${PROCESS_WAT}"
+  log " --thermo        : ${PROCESS_THERMO}"
+  log " --mmpbsa_rescore: ${MMPBSA_RESCORE}"
+  log " --hbond         : ${PROCESS_IHBOND}"
+  log " --replicas      : ${REPLICAS}"
+  log " --start_replica : ${START_REPLICA}"
+  log "Receptor         : ${RECEPTOR_NAME}"
+  log "Working directory: ${WDDIR}"
+  log "Log file         : ${MAIN_LOG}"
+}
+
 
 function CheckFiles() {
   # Check existence of files
   for ARG in "$@"; do
     if [[ ! -f ${ARG} ]]; then
-      echo "Warning: ${ARG} file doesn't exist." >&2
+      echo "Warning: ${ARG} file doesn't exist."
       #exit 1
       return 1
     fi
@@ -135,10 +180,37 @@ function CheckVariable() {
   for var_name in "$@"; do
     var_value="${!var_name}"  # indirección: obtiene el valor por nombre
     if [[ -z "${var_value}" ]]; then
-      echo "Error: variable '${var_name}' is empty or not defined." >&2
+      echo "Error: variable '${var_name}' is empty or not defined."
       exit 1
     fi
   done
+}
+
+function CheckDir() {
+  # Check if arg is directory
+  for ARG in "$@"; do
+    if [[ ! -d ${ARG} ]]; then
+      echo "Error: Directory ${ARG} doesn't exist."
+      exit 1
+    fi
+  done
+}
+
+function CheckUniqueFile() {
+  # Support for only 1 cofactor and 1 pdb per run.
+  local folder="$1"
+  local count=$(find "${folder}" -maxdepth 1 \( -name "*.pdb" -o -name "*.mol2" \) | wc -l)
+
+  if [[ ${count} -gt 1 ]]; then
+    echo "$(basename ${folder}) folder contain more than one PDB or mol2 file."
+    echo "Exiting."
+    exit 1
+  elif [[ ${count} -eq 0 ]]; then
+    echo "$(basename ${folder}) folder is empty."
+    echo "Exiting."
+    exit 1
+  fi
+
 }
 
 function ParseDirectories() {
@@ -149,7 +221,10 @@ function ParseDirectories() {
   if [[ "$mode" == "prot_only" ]]; then
     EQUI_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/MD/rep${REP}/equi/${ENSEMBLE}
     PROD_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/MD/rep${REP}/prod/${ENSEMBLE}
+    CheckDir "${EQUI_DIR}" "${PROD_DIR}"
+    
     cd ${EQUI_DIR}
+    
     TOPO_DIR=../../../../topo
     TOPO=$(echo ${TOPO_DIR}/*${RECEPTOR_NAME}_solv*.parm7)
     DRY_TOPO=$(echo ${TOPO_DIR}/*${RECEPTOR_NAME}_vac*.parm7)
@@ -157,18 +232,34 @@ function ParseDirectories() {
   elif [[ "$mode" == "prot_lig" ]]; then
     local lig=$1
     if [[ -z "${lig}" ]]; then
-      echo "Error: ligand name is required for prot_lig mode"
+      log "Error: ligand name is required for prot_lig mode"
       exit 1
     fi
+    
     EQUI_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/equi/${ENSEMBLE}
     PROD_DIR=${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/${lig}/MD/rep${REP}/prod/${ENSEMBLE}
+    CheckDir "${EQUI_DIR}" "${PROD_DIR}"
+    
     cd ${EQUI_DIR}
+    
     TOPO_DIR=../../../../topo
     TOPO=$(echo ${TOPO_DIR}/${lig}_solv_com.parm7)
     DRY_TOPO=$(echo ${TOPO_DIR}/${lig}_vac_com.parm7)
+    LIG_TOPO=$(echo ${TOPO_DIR}/${lig}_vac_lig.parm7)
     #cd ${WDDIR}
   fi
 
+}
+
+function GetLigName() {
+  local lig_topo=$1
+  log "=========================================="
+  log "Obtaining ligand residue name"
+
+  CheckProgram "cpptraj"
+  LIG_RESIDUE_NAME=$(cpptraj -p ${lig_topo} --resmask \* | tail -n 1 | awk '{print $2}')
+  CheckVariable "LIG_RESIDUE_NAME"
+  log "=========================================="
 }
 
 function TotalResWrapper() {
@@ -200,7 +291,7 @@ trajout ./noWAT_traj.nc
 EOF
   
   cd ${dir}
-  cpptraj -i ${dir}/remove_hoh.in  || { echo "Error: cpptraj failed during RemoveWat"; exit 1; }
+  cpptraj -i ${dir}/remove_hoh.in  || { log "Error: cpptraj failed during RemoveWat"; exit 1; }
   cd ${WDDIR}
 }
 
@@ -216,7 +307,7 @@ trajout ./min2_noWAT.nc
 EOF
 
   cd ${dir}
-  cpptraj -i ${dir}/remove_hoh_MMPBSA_rescore.in  || { echo "Error: cpptraj failed during RemoveWatMMPBSA"; exit 1; }
+  cpptraj -i ${dir}/remove_hoh_MMPBSA_rescore.in  || { log "Error: cpptraj failed during RemoveWatMMPBSA"; exit 1; }
   cd ${WDDIR} 
 }
 
@@ -224,43 +315,37 @@ function RMSD() {
   local dir=$1
   local target=$2
   local mode=$3
+  local reference=$4
 
-  if [[ -z ${MASK} ]]; then
-    MASK=":1-${TOTALRES}@CA,C,N"
-  fi
+  local mask="${MASK:-:1-${TOTALRES}@CA,C,N}"
 
   cat > ${dir}/rmsd.in <<EOF
 parm ${DRY_TOPO}
 trajin ./noWAT_traj.nc
-reference ${EQUI_DIR}/noWAT_traj.nc [minimized_pose]
-rms ref [minimized_pose] out ${target}_rmsd_noWAT.data "${MASK}" perres perresout ${target}_rmsd_perres_noWAT.data range 1-${TOTALRES} perresmask "${MASK}"
+reference ${reference} [minimized_pose]
+rms ref [minimized_pose] out ${target}_rmsd_noWAT.data "${mask}" perres perresout ${target}_rmsd_perres_noWAT.data range 1-${TOTALRES} perresmask "${mask}"
 average crdset Avg
 EOF
   if [[ ${mode} == "prot_lig" ]]; then
     cat >> ${dir}/rmsd.in <<EOF
-rms ref [minimized_pose] out ${LIG_NAME}_rmsd_LIG_noWAT.data :${TOTALRES}&!@H= nofit
+rms ref [minimized_pose] out ${LIG_NAME}_rmsd_LIG_noWAT.data :${LIG_RESIDUE_NAME}&!@H= nofit
 EOF
-    if [[ ${PROCESS_PROD} -eq 1 ]]; then
-      cat >> ${dir}/rmsd.in <<EOF
-rms ref [minimized_pose] out ${LIG_NAME}_rmsd_LIG_noWAT_test.data :${TOTALRES}&!@H= nofit
-EOF
-    fi
-
   fi
+
   cat >> ${dir}/rmsd.in <<EOF
 run
 rms ref Avg
   
-atomicfluct out ${target}_rmsf_noWAT.data "${MASK}" byres
+atomicfluct out ${target}_rmsf_noWAT.data "${mask}" byres
 EOF
   if [[ ${mode} == "prot_lig" ]]; then
     cat >> ${dir}/rmsd.in <<EOF
-atomicfluct out ${LIG_NAME}_rmsf_LIG_noWAT.data :${TOTALRES}&!@H= byres
+atomicfluct out ${LIG_NAME}_rmsf_LIG_noWAT.data :${LIG_RESIDUE_NAME}&!@H= byres
 EOF
   fi
   cd ${dir}
   if CheckFiles noWAT_traj.nc; then
-    cpptraj -i ./rmsd.in || { echo "Error: cpptraj failed during RMSD"; exit 1; }
+    cpptraj -i ./rmsd.in || { log "Error: cpptraj failed during RMSD"; exit 1; }
   fi
   cd ${WDDIR}
 
@@ -297,7 +382,7 @@ writedata ${outName}_Press.data OutputData[PRESS]
 writedata ${outName}_Volume.data OutputData[VOLUME]
 EOF
 
-  cpptraj -i "${dir}/process_out.in" || { echo "Error with ThermodynamicsData(). Exiting."; exit 1; }
+  cpptraj -i "${dir}/process_out.in" || { log "Error with ThermodynamicsData(). Exiting."; exit 1; }
   cd ${WDDIR}
 }
   
@@ -323,83 +408,79 @@ EOF
     cd ${WDDIR}
 
   else
-    echo "Warning in IntermolecularHBond: Trying to compute protein-ligand h-bonds in only_protein mode."
-    echo "Skipping."
+    log "Warning in IntermolecularHBond: Trying to compute protein-ligand h-bonds in only_protein mode."
+    log "Skipping."
+  fi
+}
+
+function ProcessPhase() {
+  # Process a single simulation phase (equi or prod).
+  local dir=$1
+  local target=$2
+  local mode=$3
+  local phase=$4
+
+  if [[ ! -d "${dir}" ]]; then
+    log "Error: directory ${dir} does not exist. Skipping phase ${phase}."
+    return 1
+  fi
+
+  log "[${phase}] Processing in: ${dir}"
+
+  if [[ ${PROCESS_WAT} -eq 1 ]]; then
+    log "[${phase}] Removing solvent..."
+    if [[ "${phase}" == "equi" ]]; then
+      RemoveWat "${dir}" "${dir}/md_nvt_ntr.nc" "${dir}/"*npt_equil*.nc
+    else
+      RemoveWat "${dir}" "${dir}/"*md_prod*.nc
+    fi
+  fi
+
+  if [[ ${MMPBSA_RESCORE} -eq 1 ]]; then
+    log "[${phase}] MMPBSA rescore..."
+    RemoveWatMMPBSA "${dir}"
+  fi
+
+  if [[ ${PROCESS_RMSD} -eq 1 ]]; then
+    log "[${phase}] Calculating RMSD/RMSF..."
+    if [[ "${phase}" == "equi" ]]; then
+      RMSD "${dir}" "${target}" "${mode}" "./noWAT_traj.nc"
+    else
+      RMSD "${dir}" "${target}" "${mode}" "../../equi/${ENSEMBLE}/noWAT_traj.nc"
+    fi
+  fi
+
+  if [[ ${PROCESS_THERMO} -eq 1 ]]; then
+    log "[${phase}] Extracting thermodynamic data..."
+    ThermodynamicsData "${dir}" "${phase}"
+  fi
+
+  if [[ ${PROCESS_IHBOND} -eq 1 ]]; then
+    log "[${phase}] Calculating H-bonds..."
+    IntermolecularHBond "${dir}" "${target}" "${mode}"
   fi
 }
 
 function Process() {
-  mode=$1
-  target=$2
+  local mode=$1
+  local target=$2
 
   if [[ ${PROCESS_EQUI} -eq 1 ]]; then
-
-    if [[ ${PROCESS_WAT} -eq 1 ]]; then
-      RemoveWat ${EQUI_DIR} ${EQUI_DIR}/md_nvt_ntr.nc ${EQUI_DIR}/*npt_equil*.nc
-    fi
-    
-    if [[ ${MMPBSA_RESCORE} -eq 1 ]]; then
-      RemoveWatMMPBSA ${EQUI_DIR}
-    fi
-    
-    if [[ ${PROCESS_RMSD} -eq 1 ]]; then
-      RMSD ${EQUI_DIR} ${target} ${mode}
-    fi
-
-    if [[ ${PROCESS_THERMO} -eq 1 ]]; then
-      ThermodynamicsData ${EQUI_DIR} "equi"
-    fi
-
-    if [[ ${PROCESS_IHBOND} -eq 1 ]]; then
-      IntermolecularHBond ${EQUI_DIR} ${target} ${mode}
-    fi
-
+    ProcessPhase "${EQUI_DIR}" "${target}" "${mode}" "equi"
   fi
 
   if [[ ${PROCESS_PROD} -eq 1 ]]; then
-
-    if [[ ${PROCESS_WAT} -eq 1 ]]; then
-      RemoveWat ${PROD_DIR} ${PROD_DIR}/*md_prod*.nc
-    fi
-    
-    if [[ ${MMPBSA_RESCORE} -eq 1 ]]; then
-      RemoveWatMMPBSA ${PROD_DIR}
-    fi
-
-    if [[ ${PROCESS_RMSD} -eq 1 ]]; then
-      RMSD ${PROD_DIR} ${target} ${mode}
-    fi
-
-    if [[ ${PROCESS_THERMO} -eq 1 ]]; then
-      ThermodynamicsData ${PROD_DIR} "prod"
-    fi
-
-    if [[ ${PROCESS_IHBOND} -eq 1 ]]; then
-      IntermolecularHBond ${PROD_DIR} ${target} ${mode}
-    fi
-
+    ProcessPhase "${PROD_DIR}" "${target}" "${mode}" "prod"
   fi
 }
 
-function CheckUniqueFile() {
-  # Support for only 1 cofactor and 1 pdb per run.
-  local folder="$1"
-  local count=$(find "${folder}" -maxdepth 1 \( -name "*.pdb" -o -name "*.mol2" \) | wc -l)
 
-  if [[ ${count} -gt 1 ]]; then
-    echo "$(basename ${folder}) folder contain more than one PDB or mol2 file."
-    echo "Exiting."
-    exit 1
-  elif [[ ${count} -eq 0 ]]; then
-    echo "$(basename ${folder}) folder is empty."
-    echo "Exiting."
-    exit 1
-  fi
-
-}
 ############################################################
 # Main
 ############################################################
+
+CheckProgram "cpptraj"
+
 # Required options
 CheckVariable "WDDIR"
 
@@ -408,19 +489,27 @@ WDDIR=$(realpath "$WDDIR")
 CheckUniqueFile ${WDDIR}/receptor/
 RECEPTOR_NAME=$(basename "${WDDIR}/receptor/"*.pdb .pdb)
 
-CheckProgram "cpptraj"
+# Initialize log path based on mode, now that WDDIR and RECEPTOR_NAME are resolved.
+if [[ ${PROCESS_PROT_LIG} -eq 1 ]]; then
+  MAIN_LOG="${WDDIR}/setupMD/${RECEPTOR_NAME}/proteinLigandMD/process_MD.log"
+else
+  MAIN_LOG="${WDDIR}/setupMD/${RECEPTOR_NAME}/onlyProteinMD/process_MD.log"
+fi
+mkdir -p "$(dirname ${MAIN_LOG})"
+
+CLIflags
+
+if [[ ${PROCESS_PROT_ONLY} -eq 0 && ${PROCESS_PROT_LIG} -eq 0 ]]; then
+  log "Error: Must provide --prot_only or --prot_lig options."
+  log "Check help with --help."
+  exit 1
+fi
 
 for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
-  echo -e "\n Doing replica: ${REP}"
-
-  if [[ ${PROCESS_PROT_ONLY} -eq 0 && ${PROCESS_PROT_LIG} -eq 0 ]]; then
-    echo "Error: Must provide --prot_only or --prot_lig options."
-    echo "Check help with --help."
-    exit 1
-  fi
+  log " Doing replica: ${REP}"
 
   if [[ ${PROCESS_PROT_ONLY} -eq 1 ]]; then
-    echo -e "\nDoing receptor: ${RECEPTOR_NAME}"
+    log "Doing receptor: ${RECEPTOR_NAME}"
     ParseDirectories "prot_only"
     TotalResWrapper ${DRY_TOPO}
     Process "prot_only" ${RECEPTOR_NAME}
@@ -430,16 +519,17 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
   if [[ ${PROCESS_PROT_LIG} -eq 1 ]]; then
     
     LIGANDS_PATH=("${WDDIR}/ligands/"*.mol2)
-    
+
     if [[ ! -f "${LIGANDS_PATH[0]}" ]]; then
-      echo "Error: --prot_lig is 1 but ligands folder is empty."
+      log "Error: --prot_lig is 1 but ligands folder is empty."
       exit 1
     fi
 
     for LIG_NAME in ${LIGANDS_PATH[@]}; do
       LIG_NAME=$(basename ${LIG_NAME} .mol2)
-      echo "Doing ligand: ${LIG_NAME}"
+      log "Doing ligand: ${LIG_NAME}"
       ParseDirectories "prot_lig" ${LIG_NAME}
+      GetLigName ${LIG_TOPO}
       TotalResWrapper ${DRY_TOPO}
       Process "prot_lig" "${LIG_NAME}"
     done
@@ -448,4 +538,4 @@ for REP in $(seq ${START_REPLICA} ${REPLICAS}); do
     
 done
 
-echo "Done."
+log "Done."
