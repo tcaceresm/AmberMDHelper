@@ -268,22 +268,41 @@ function TotalResWrapper() {
   TOTALRES=$(cpptraj -p ${dry_topo} --resmask \* | tail -n 1 | awk '{print $1}')
 }
 
-function RemoveWat() {
-  # Remove Water and ions molecules (hardcoded)
+function ConcatenateTrajs() {
+  # Concatenate trajectories
   local dir=$1
   shift
   local traj=($(echo "$@" | tr ' ' '\n' | sort -V))
   traj=(${traj[@]##*/})
 
-  cat > ${dir}/remove_hoh.in <<EOF
+  cat > ${dir}/concatenate_trajs.in <<EOF
 parm ${TOPO}
 EOF
   for trajectory in ${traj[@]}; do
-    cat >> ${dir}/remove_hoh.in <<EOF
+    cat >> ${dir}/concatenate_trajs.in <<EOF
 trajin ${trajectory}
 EOF
   done
-cat >> ${dir}/remove_hoh.in <<EOF
+cat >> ${dir}/concatenate_trajs.in <<EOF
+
+autoimage :1-${TOTALRES}
+trajout ./concatenated_traj.nc
+EOF
+  
+  cd ${dir}
+  cpptraj -i ${dir}/concatenate_trajs.in  || { log "Error: cpptraj failed during ConcatenateTrajs"; exit 1; }
+  cd ${WDDIR}
+}
+
+function RemoveWat() {
+  # Remove Water and ions molecules (hardcoded)
+  local dir=$1
+  local traj=$2
+
+  cat > ${dir}/remove_hoh.in <<EOF
+parm ${TOPO}
+trajin ${traj}
+
 strip :Na+,K+,Cl-
 strip !(:1-${TOTALRES})
 autoimage :1-${TOTALRES}
@@ -427,13 +446,16 @@ function ProcessPhase() {
 
   log "[${phase}] Processing in: ${dir}"
 
+  # concatenate trajs
+  if [[ "${phase}" == "equi" ]]; then
+    ConcatenateTrajs "${dir}" "${dir}/md_nvt_ntr.nc" "${dir}/"*npt_equil*.nc
+  else
+    ConcatenateTrajs "${dir}" "${dir}/"*md_prod*.nc
+  fi
+
   if [[ ${PROCESS_WAT} -eq 1 ]]; then
     log "[${phase}] Removing solvent..."
-    if [[ "${phase}" == "equi" ]]; then
-      RemoveWat "${dir}" "${dir}/md_nvt_ntr.nc" "${dir}/"*npt_equil*.nc
-    else
-      RemoveWat "${dir}" "${dir}/"*md_prod*.nc
-    fi
+    RemoveWat "${dir}" "${dir}/concatenated_traj.nc"
   fi
 
   if [[ ${MMPBSA_RESCORE} -eq 1 ]]; then
